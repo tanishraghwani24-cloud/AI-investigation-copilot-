@@ -5,6 +5,7 @@ investigation nodes in a fixed linear pipeline.
 """
 
 from langgraph.graph import END, START, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
 from app.graph.nodes import (
     compliance_node,
@@ -23,7 +24,7 @@ DECISION = "decision"
 REPORTING = "reporting"
 
 
-def build_investigation_graph() -> StateGraph:
+def build_investigation_graph() -> CompiledStateGraph:
     """Build, wire, and compile the investigation StateGraph.
 
     Execution order:
