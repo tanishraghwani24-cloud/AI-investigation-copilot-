@@ -4,7 +4,7 @@ Produces a realistic dummy InvestigationReport with graph
 visualizations and a timeline. No AI or external API calls.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from app.schemas.investigation_state import (
@@ -155,7 +155,7 @@ def reporting_node(state: Any) -> dict:
             "blocking a potentially legitimate transaction."
         ),
         graphs=graphs,
-        generated_at=datetime.utcnow(),
+        generated_at=datetime.now(timezone.utc),
     )
 
     return {

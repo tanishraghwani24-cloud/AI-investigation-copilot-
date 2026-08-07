@@ -4,7 +4,7 @@ Defines the Pydantic models and enums that form the single shared state
 object every LangGraph node will later read from and write to.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
@@ -255,7 +255,7 @@ class AgentError(BaseModel):
     agent_name: str = Field(..., description="Name of the agent that failed")
     error_type: str = Field(..., description="Exception class name")
     message: str = Field(..., description="Human-readable error message")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 # ============================================================
@@ -397,8 +397,8 @@ class InvestigationState(BaseModel):
     decision_optimization: Optional[DecisionOptimization] = Field(default=None)
     investigation_report: Optional[InvestigationReport] = Field(default=None)
     current_stage: CurrentStage = Field(default=CurrentStage.INTAKE)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     errors: list[AgentError] = Field(default_factory=list)
 
 
@@ -413,7 +413,7 @@ def create_initial_state(case_id: str, case_input: CaseInput) -> InvestigationSt
     All agent outputs default to None, the stage is set to INTAKE,
     and timestamps are initialised to the current time.
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     return InvestigationState(
         case_id=case_id,
         case_input=case_input,
