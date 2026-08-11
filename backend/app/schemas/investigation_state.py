@@ -65,6 +65,16 @@ class CurrentStage(str, Enum):
     DONE = "DONE"
 
 
+class ProcessingStatus(str, Enum):
+    """Lifecycle status of a supporting document's processing."""
+
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    EXTRACTED = "EXTRACTED"
+    SUMMARIZED = "SUMMARIZED"
+    FAILED = "FAILED"
+
+
 # ============================================================
 # Reusable Domain Models
 # ============================================================
@@ -166,6 +176,26 @@ class SupportingDocument(BaseModel):
     file_url: Optional[str] = Field(default=None)
     uploaded_at: Optional[datetime] = Field(default=None)
     summary: Optional[str] = Field(default=None, description="Extracted or AI-generated summary")
+    extracted_text: Optional[str] = Field(
+        default=None,
+        description="Raw text extracted from the document, via direct extraction or OCR",
+    )
+    extracted_entities: list[str] = Field(
+        default_factory=list,
+        description="Named entities identified in the document (people, accounts, organizations, etc.)",
+    )
+    extracted_transactions: list[str] = Field(
+        default_factory=list,
+        description="References to transactions identified within the document content",
+    )
+    evidence_references: list[str] = Field(
+        default_factory=list,
+        description="IDs linking this document's content to specific evidence used elsewhere in the investigation",
+    )
+    processing_status: ProcessingStatus = Field(
+        default=ProcessingStatus.PENDING,
+        description="Current stage of this document's processing pipeline",
+    )
 
 
 class ComplianceMapping(BaseModel):
@@ -221,6 +251,22 @@ class DecisionOption(BaseModel):
     )
     risk_score: Optional[float] = Field(
         default=None, ge=0.0, le=1.0, description="Associated risk level"
+    )
+    pros: list[str] = Field(
+        default_factory=list,
+        description="Advantages of choosing this action",
+    )
+    cons: list[str] = Field(
+        default_factory=list,
+        description="Drawbacks of choosing this action",
+    )
+    risks: list[str] = Field(
+        default_factory=list,
+        description="Specific named risks of this action — distinct from risk_score, which is a single 0-1 magnitude",
+    )
+    mitigation: list[str] = Field(
+        default_factory=list,
+        description="Steps that reduce the listed risks",
     )
 
 

@@ -26,6 +26,7 @@ from app.schemas.investigation_state import (
     InvestigationState,
     MerchantInfo,
     CustomerProfile,
+    ProcessingStatus,
     ReportGraphs,
     SeverityLevel,
     SupportingDocument,
@@ -41,6 +42,7 @@ __all__ = [
     "SeverityLevel",
     "DecisionAction",
     "CurrentStage",
+    "ProcessingStatus",
     # Domain models
     "Transaction",
     "CustomerProfile",
