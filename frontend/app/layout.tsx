@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter, Geist } from 'next/font/google';
+import Link from 'next/link';
 import './globals.css';
 import { cn } from "@/lib/utils";
 
@@ -12,6 +13,13 @@ export const metadata: Metadata = {
   description: 'Fraud Investigation & Decision Intelligence Platform',
 };
 
+const navItems = [
+  { label: 'Dashboard', href: '/' },
+  { label: 'Investigations', href: '/investigations' },
+  { label: 'Reports', href: '#' },
+  { label: 'Settings', href: '#' },
+];
+
 export default function RootLayout({
   children,
 }: {
@@ -23,17 +31,19 @@ export default function RootLayout({
         {/* Sidebar */}
         <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
           <div className="h-16 flex items-center px-6 border-b border-gray-200">
-            <h1 className="text-lg font-semibold text-gray-900">Copilot</h1>
+            <Link href="/" className="text-lg font-semibold text-gray-900">
+              Copilot
+            </Link>
           </div>
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-            {['Dashboard', 'New Investigation', 'Investigations', 'Reports', 'Settings'].map((item) => (
-              <a
-                key={item}
-                href="#"
-                className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100"
+            {navItems.map((item) => (
+              <Link
+                key={item.label}
+                href={item.href}
+                className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100 transition-colors"
               >
-                {item}
-              </a>
+                {item.label}
+              </Link>
             ))}
           </nav>
         </aside>

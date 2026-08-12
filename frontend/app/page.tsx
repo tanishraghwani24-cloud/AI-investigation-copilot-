@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function Home() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
@@ -7,9 +9,13 @@ export default function Home() {
       <p className="text-lg text-gray-600 mb-8 max-w-2xl">
         Fraud Investigation & Decision Intelligence Platform
       </p>
-      <button className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors">
-        New Investigation
-      </button>
+      <Link
+        href="/investigations"
+        className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+      >
+        View Investigations
+      </Link>
     </div>
   );
 }
+
