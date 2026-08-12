@@ -15,9 +15,9 @@ class Settings(BaseSettings):
     ENV: str = "development"
     API_V1_PREFIX: str = "/api"
 
-    # --- Future Phase Settings ---
-    # Database settings will be added here.
-    # Gemini / LLM settings will be added here.
+    # --- Gemini / LLM Settings ---
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.0-flash"
 
     model_config = {
         "env_file": ".env",
