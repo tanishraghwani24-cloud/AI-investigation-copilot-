@@ -221,6 +221,7 @@ class TestDocumentUploadEndpoint:
         )
         doc = SupportingDocument.model_validate(response.json())
 
+        assert doc.file_url is not None
         stored_path = Path(doc.file_url)
         assert stored_path.exists(), f"File not found at {stored_path}"
         assert stored_path.read_bytes() == test_content
