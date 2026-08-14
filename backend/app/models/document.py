@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, String, text
+from sqlalchemy import DateTime, ForeignKey, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -45,6 +45,12 @@ class DocumentRecord(Base):
     processing_status: Mapped[str] = mapped_column(
         String(32), nullable=False, default="PENDING",
     )
+    extracted_text: Mapped[str | None] = mapped_column(
+        Text, nullable=True,
+    )
+    summary: Mapped[str | None] = mapped_column(
+        Text, nullable=True,
+    )
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -54,3 +60,4 @@ class DocumentRecord(Base):
 
     def __repr__(self) -> str:
         return f"<DocumentRecord document_id={self.document_id!r} case_id={self.case_id!r}>"
+

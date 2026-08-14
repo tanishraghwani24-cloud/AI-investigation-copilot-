@@ -3,10 +3,9 @@
 Provides the POST /api/investigations/{case_id}/documents endpoint
 for uploading supporting documents to an investigation case.
 
-Round 1: Accepts a file, stores it to the local filesystem, creates
-a SupportingDocument with processing_status=PENDING, and stores the
-metadata in the in-memory document store.  No extraction, parsing,
-OCR, or AI analysis.
+Round 2: Accepts a file, stores it to the local filesystem, extracts
+text from PDF files using pypdf, persists the SupportingDocument via
+DocumentRepository → Postgres.  The Round 1 in-memory store is retired.
 """
 
 import os
@@ -14,13 +13,16 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.repository import DocumentRepository
+from app.db.session import get_db_session
 from app.schemas.investigation_state import (
     ProcessingStatus,
     SupportingDocument,
 )
-from app.services.document_store import add_document, get_documents
+from app.services.document_service import process_pdf
 
 router = APIRouter()
 
@@ -33,12 +35,22 @@ _KNOWN_CASE_IDS: set[str] = {"CASE-2025-00042"}
 # ── Upload directory ─────────────────────────────────────────────────
 _UPLOAD_DIR = Path(__file__).resolve().parents[3] / "uploads"
 
+# ── Repository instance ──────────────────────────────────────────────
+_doc_repo = DocumentRepository()
+
 
 def _ensure_upload_dir(case_id: str) -> Path:
     """Create the upload directory for a case if it doesn't exist."""
     case_dir = _UPLOAD_DIR / case_id
     case_dir.mkdir(parents=True, exist_ok=True)
     return case_dir
+
+
+def _is_pdf(filename: str | None) -> bool:
+    """Check if the filename indicates a PDF file."""
+    if not filename:
+        return False
+    return filename.lower().endswith(".pdf")
 
 
 @router.post(
@@ -49,20 +61,25 @@ async def upload_document(
     case_id: str,
     file: UploadFile = File(...),
     document_type: str = Form(default="OTHER"),
+    db: AsyncSession = Depends(get_db_session),
 ) -> SupportingDocument:
     """Upload a supporting document for an investigation case.
 
     Accepts a file upload, stores the raw file to the local filesystem,
-    creates a SupportingDocument record with processing_status=PENDING,
-    and stores it in the in-memory document store.
+    and persists a DocumentRecord via the repository.
 
-    No document extraction, parsing, or analysis is performed.
-    Those will be added in future rounds.
+    For PDF files, text extraction is performed using pypdf:
+    - On success: extracted_text and summary are populated,
+      processing_status = EXTRACTED.
+    - On failure: processing_status = FAILED.
+
+    Non-PDF files are stored with processing_status = PENDING.
 
     Args:
         case_id: The investigation case identifier.
         file: The uploaded file.
         document_type: Type of document (e.g. INVOICE, ID_SCAN, BANK_STATEMENT).
+        db: Async database session (injected).
 
     Returns:
         The created SupportingDocument metadata.
@@ -89,35 +106,58 @@ async def upload_document(
     contents = await file.read()
     file_path.write_bytes(contents)
 
-    # -- Build file URL (local path for Round 1) --
+    # -- Build file URL (local path) --
     file_url = str(file_path)
 
-    # -- Create SupportingDocument with PENDING status --
+    # -- Prepare document data --
     now = datetime.now(timezone.utc)
-    document = SupportingDocument(
-        document_id=document_id,
-        document_type=document_type,
-        file_name=file.filename,
-        file_url=file_url,
-        uploaded_at=now,
-        processing_status=ProcessingStatus.PENDING,
+    document_data: dict = {
+        "document_id": document_id,
+        "document_type": document_type,
+        "file_name": file.filename,
+        "file_url": file_url,
+        "uploaded_at": now,
+        "processing_status": ProcessingStatus.PENDING.value,
+        "extracted_text": None,
+        "summary": None,
+    }
+
+    # -- Extract text from PDF files --
+    if _is_pdf(file.filename):
+        result = process_pdf(contents)
+        document_data["extracted_text"] = result["extracted_text"]
+        document_data["summary"] = result["summary"]
+        document_data["processing_status"] = result["processing_status"].value
+
+    # -- Persist via repository --
+    record = await _doc_repo.create(db, case_id, document_data)
+
+    # -- Build and return SupportingDocument response --
+    return SupportingDocument(
+        document_id=record.document_id,
+        document_type=record.document_type,
+        file_name=record.file_name,
+        file_url=record.file_url,
+        uploaded_at=record.uploaded_at,
+        extracted_text=record.extracted_text,
+        summary=record.summary,
+        processing_status=ProcessingStatus(record.processing_status),
     )
-
-    # -- Store metadata in the in-memory store --
-    add_document(case_id, document)
-
-    return document
 
 
 @router.get(
     "/investigations/{case_id}/documents",
     response_model=list[SupportingDocument],
 )
-async def list_documents(case_id: str) -> list[SupportingDocument]:
+async def list_documents(
+    case_id: str,
+    db: AsyncSession = Depends(get_db_session),
+) -> list[SupportingDocument]:
     """List all documents for an investigation case.
 
     Args:
         case_id: The investigation case identifier.
+        db: Async database session (injected).
 
     Returns:
         List of SupportingDocument metadata objects.
@@ -131,4 +171,18 @@ async def list_documents(case_id: str) -> list[SupportingDocument]:
             detail=f"Investigation case not found: {case_id}",
         )
 
-    return get_documents(case_id)
+    records = await _doc_repo.list_by_case(db, case_id)
+    return [
+        SupportingDocument(
+            document_id=r.document_id,
+            document_type=r.document_type,
+            file_name=r.file_name,
+            file_url=r.file_url,
+            uploaded_at=r.uploaded_at,
+            extracted_text=r.extracted_text,
+            summary=r.summary,
+            processing_status=ProcessingStatus(r.processing_status),
+        )
+        for r in records
+    ]
+
