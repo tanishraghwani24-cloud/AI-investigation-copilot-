@@ -1,8 +1,10 @@
 """Repository layer for database operations.
 
-``InvestigationRepository`` methods remain stubs (future round).
+``InvestigationRepository`` provides full CRUD for investigation cases.
 ``DocumentRepository`` provides real CRUD for supporting documents.
 """
+
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,16 +22,45 @@ class InvestigationRepository:
         case_id: str,
         state_json: dict,
     ) -> InvestigationCase:
-        """Persist a new investigation case."""
-        raise NotImplementedError
+        """Persist a new investigation case.
+
+        Args:
+            session: Active async database session.
+            case_id: The investigation case identifier.
+            state_json: Full serialised InvestigationState as a dict.
+
+        Returns:
+            The newly created InvestigationCase record.
+        """
+        status = state_json.get("current_stage", "INTAKE")
+        record = InvestigationCase(
+            case_id=case_id,
+            status=status,
+            state_json=state_json,
+        )
+        session.add(record)
+        await session.flush()
+        return record
 
     async def get_by_case_id(
         self,
         session: AsyncSession,
         case_id: str,
     ) -> InvestigationCase | None:
-        """Retrieve an investigation case by its case_id."""
-        raise NotImplementedError
+        """Retrieve an investigation case by its case_id.
+
+        Args:
+            session: Active async database session.
+            case_id: The investigation case identifier to look up.
+
+        Returns:
+            The matching InvestigationCase, or None if not found.
+        """
+        stmt = select(InvestigationCase).where(
+            InvestigationCase.case_id == case_id
+        )
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none()
 
     async def update_state(
         self,
@@ -37,15 +68,43 @@ class InvestigationRepository:
         case_id: str,
         state_json: dict,
     ) -> InvestigationCase | None:
-        """Update the stored state for an investigation case."""
-        raise NotImplementedError
+        """Update the stored state for an investigation case.
+
+        Overwrites the ``state_json`` column, derives ``status`` from the
+        state's ``current_stage``, and bumps ``updated_at``.
+
+        Args:
+            session: Active async database session.
+            case_id: The investigation case identifier.
+            state_json: Updated serialised InvestigationState.
+
+        Returns:
+            The updated InvestigationCase, or None if the case was not found.
+        """
+        record = await self.get_by_case_id(session, case_id)
+        if record is None:
+            return None
+        record.state_json = state_json
+        record.status = state_json.get("current_stage", record.status)
+        record.updated_at = datetime.now(timezone.utc)
+        await session.flush()
+        return record
 
     async def list_all(
         self,
         session: AsyncSession,
     ) -> list[InvestigationCase]:
-        """List all investigation cases."""
-        raise NotImplementedError
+        """List all investigation cases, ordered by creation time.
+
+        Args:
+            session: Active async database session.
+
+        Returns:
+            A list of all InvestigationCase records.
+        """
+        stmt = select(InvestigationCase).order_by(InvestigationCase.created_at)
+        result = await session.execute(stmt)
+        return list(result.scalars().all())
 
 
 class DocumentRepository:
