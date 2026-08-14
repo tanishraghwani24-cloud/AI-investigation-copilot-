@@ -1,10 +1,11 @@
-"""Tests for the POST /api/investigations skeleton endpoint.
+"""Tests for the POST /api/investigations endpoint.
 
-Verifies Round 1 requirements:
+Verifies:
 - FastAPI app starts and serves requests
 - POST /api/investigations returns HTTP 200 with valid InvestigationState
 - GET /api/health continues to work
 - No database or external dependencies required
+- Deterministic output (same data on repeated calls)
 """
 
 from fastapi.testclient import TestClient
@@ -52,15 +53,23 @@ class TestInvestigationsEndpoint:
         assert state.case_input.customer_profile is not None
         assert len(state.case_input.customer_profile.name) > 0
 
-    def test_has_agent_output_placeholders(self) -> None:
-        """Response includes agent output sections (placeholder data)."""
+    def test_has_generated_transactions(self) -> None:
+        """Response includes generated transaction data."""
         response = client.post("/api/investigations")
         state = InvestigationState.model_validate(response.json())
-        assert state.context_intelligence is not None
-        assert state.investigation_reasoning is not None
-        assert state.evidence_compliance_validation is not None
-        assert state.decision_optimization is not None
-        assert state.investigation_report is not None
+        transactions = state.case_input.transactions
+        assert len(transactions) >= 1
+        for txn in transactions:
+            assert txn.amount > 0
+            assert len(txn.transaction_id) > 0
+            assert len(txn.sender_account) > 0
+
+    def test_has_alert_reason(self) -> None:
+        """Response includes an alert reason."""
+        response = client.post("/api/investigations")
+        state = InvestigationState.model_validate(response.json())
+        assert state.case_input.alert_reason is not None
+        assert len(state.case_input.alert_reason) > 0
 
     def test_is_deterministic(self) -> None:
         """Two consecutive calls return identical data."""
