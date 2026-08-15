@@ -6,6 +6,10 @@ for uploading supporting documents to an investigation case.
 Round 2: Accepts a file, stores it to the local filesystem, extracts
 text from PDF files using pypdf, persists the SupportingDocument via
 DocumentRepository → Postgres.  The Round 1 in-memory store is retired.
+
+Round 3: Adds OCR/Vision fallback for scanned PDFs, image upload
+support, entity extraction, and transaction extraction.  All extracted
+data is persisted to the database.
 """
 
 import os
@@ -22,7 +26,7 @@ from app.schemas.investigation_state import (
     ProcessingStatus,
     SupportingDocument,
 )
-from app.services.document_service import process_pdf
+from app.services.document_service import process_document
 
 router = APIRouter()
 
@@ -53,6 +57,19 @@ def _is_pdf(filename: str | None) -> bool:
     return filename.lower().endswith(".pdf")
 
 
+def _is_image(filename: str | None) -> bool:
+    """Check if the filename indicates a supported image file."""
+    if not filename:
+        return False
+    ext = os.path.splitext(filename)[1].lower()
+    return ext in {".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp", ".webp"}
+
+
+def _is_processable(filename: str | None) -> bool:
+    """Check if the file can be processed (PDF or image)."""
+    return _is_pdf(filename) or _is_image(filename)
+
+
 @router.post(
     "/investigations/{case_id}/documents",
     response_model=SupportingDocument,
@@ -68,12 +85,16 @@ async def upload_document(
     Accepts a file upload, stores the raw file to the local filesystem,
     and persists a DocumentRecord via the repository.
 
-    For PDF files, text extraction is performed using pypdf:
-    - On success: extracted_text and summary are populated,
-      processing_status = EXTRACTED.
-    - On failure: processing_status = FAILED.
+    For PDF files: text extraction is attempted using pypdf.  If no
+    usable text is found (scanned/image-only PDF), OCR/Vision fallback
+    is triggered via GeminiClient.
 
-    Non-PDF files are stored with processing_status = PENDING.
+    For image files: OCR/Vision is used to extract text.
+
+    After text extraction (from either path), entity and transaction
+    extraction runs on the resulting text.
+
+    Non-PDF, non-image files are stored with processing_status = PENDING.
 
     Args:
         case_id: The investigation case identifier.
@@ -120,14 +141,18 @@ async def upload_document(
         "processing_status": ProcessingStatus.PENDING.value,
         "extracted_text": None,
         "summary": None,
+        "extracted_entities": [],
+        "extracted_transactions": [],
     }
 
-    # -- Extract text from PDF files --
-    if _is_pdf(file.filename):
-        result = process_pdf(contents)
+    # -- Process document (PDF, image, or other) --
+    if _is_processable(file.filename):
+        result = process_document(contents, file.filename or "")
         document_data["extracted_text"] = result["extracted_text"]
         document_data["summary"] = result["summary"]
         document_data["processing_status"] = result["processing_status"].value
+        document_data["extracted_entities"] = result.get("extracted_entities", [])
+        document_data["extracted_transactions"] = result.get("extracted_transactions", [])
 
     # -- Persist via repository --
     record = await _doc_repo.create(db, case_id, document_data)
@@ -141,6 +166,8 @@ async def upload_document(
         uploaded_at=record.uploaded_at,
         extracted_text=record.extracted_text,
         summary=record.summary,
+        extracted_entities=getattr(record, "extracted_entities", None) or [],
+        extracted_transactions=getattr(record, "extracted_transactions", None) or [],
         processing_status=ProcessingStatus(record.processing_status),
     )
 
@@ -181,8 +208,9 @@ async def list_documents(
             uploaded_at=r.uploaded_at,
             extracted_text=r.extracted_text,
             summary=r.summary,
+            extracted_entities=getattr(r, "extracted_entities", None) or [],
+            extracted_transactions=getattr(r, "extracted_transactions", None) or [],
             processing_status=ProcessingStatus(r.processing_status),
         )
         for r in records
     ]
-

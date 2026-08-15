@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from sqlalchemy import DateTime, ForeignKey, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.types import JSON
 
 from app.db.session import Base
 
@@ -50,6 +51,12 @@ class DocumentRecord(Base):
     )
     summary: Mapped[str | None] = mapped_column(
         Text, nullable=True,
+    )
+    extracted_entities: Mapped[list | None] = mapped_column(
+        JSON, nullable=True, default=list,
+    )
+    extracted_transactions: Mapped[list | None] = mapped_column(
+        JSON, nullable=True, default=list,
     )
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

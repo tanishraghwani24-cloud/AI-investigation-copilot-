@@ -113,6 +113,49 @@ class GeminiClient:
                 original_error=exc,
             ) from exc
 
+    def generate_with_image(
+        self,
+        prompt: str,
+        image_bytes: bytes,
+        mime_type: str = "image/png",
+    ) -> str:
+        """Generate content from a text prompt and an image.
+
+        Sends multimodal content (image + text) to Gemini for
+        vision tasks such as OCR text extraction from scanned
+        documents or images.
+
+        Args:
+            prompt: The text prompt to send alongside the image.
+            image_bytes: Raw bytes of the image.
+            mime_type: MIME type of the image (e.g. ``"image/png"``,
+                ``"image/jpeg"``, ``"application/pdf"``).
+
+        Returns:
+            The generated text response from Gemini.
+
+        Raises:
+            GeminiClientError: On any SDK, network, or processing failure.
+        """
+        from google.genai import types as genai_types
+
+        try:
+            image_part = genai_types.Part.from_bytes(
+                data=image_bytes,
+                mime_type=mime_type,
+            )
+            response = self._client.models.generate_content(
+                model=self._model_name,
+                contents=[image_part, prompt],
+            )
+            return response.text
+        except Exception as exc:
+            raise GeminiClientError(
+                f"Gemini Vision API call failed: {exc}",
+                original_error=exc,
+            ) from exc
+
+
 
 # ============================================================
 # Factory

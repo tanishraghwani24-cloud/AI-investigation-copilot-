@@ -103,6 +103,8 @@ async def run_investigation_with_persistence(
             ),
             "extracted_text": doc.extracted_text,
             "summary": doc.summary,
+            "extracted_entities": doc.extracted_entities or [],
+            "extracted_transactions": doc.extracted_transactions or [],
         }
         if doc.uploaded_at is not None:
             doc_data["uploaded_at"] = doc.uploaded_at
