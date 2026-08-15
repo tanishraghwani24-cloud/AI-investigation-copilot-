@@ -74,12 +74,7 @@ def _make_test_state() -> InvestigationState:
     )
 
 
-class _MockInvestigationRecord:
-    """Lightweight stand-in for InvestigationCase ORM instances."""
 
-    def __init__(self, case_id: str, state_json: dict) -> None:
-        self.case_id = case_id
-        self.state_json = state_json
 
 
 # ── TEST 7: Existing investigation ───────────────────────────────────
@@ -91,14 +86,10 @@ class TestExistingInvestigation:
     def test_returns_http_200(self) -> None:
         """GET returns HTTP 200 for an existing investigation."""
         test_state = _make_test_state()
-        state_json = test_state.model_dump(mode="json")
-        mock_record = _MockInvestigationRecord(
-            case_id="CASE-GET-001", state_json=state_json,
-        )
         with patch(
-            "app.api.routes.investigations._investigation_repo.get_by_case_id",
+            "app.api.routes.investigations._investigation_service.get_investigation",
             new_callable=AsyncMock,
-            return_value=mock_record,
+            return_value=test_state,
         ):
             response = client.get("/api/investigations/CASE-GET-001")
         assert response.status_code == 200
@@ -106,14 +97,10 @@ class TestExistingInvestigation:
     def test_returns_valid_investigation_state(self) -> None:
         """Response validates against InvestigationState schema."""
         test_state = _make_test_state()
-        state_json = test_state.model_dump(mode="json")
-        mock_record = _MockInvestigationRecord(
-            case_id="CASE-GET-001", state_json=state_json,
-        )
         with patch(
-            "app.api.routes.investigations._investigation_repo.get_by_case_id",
+            "app.api.routes.investigations._investigation_service.get_investigation",
             new_callable=AsyncMock,
-            return_value=mock_record,
+            return_value=test_state,
         ):
             response = client.get("/api/investigations/CASE-GET-001")
         data = response.json()
@@ -123,14 +110,10 @@ class TestExistingInvestigation:
     def test_identifier_matches(self) -> None:
         """Returned case_id matches the requested identifier."""
         test_state = _make_test_state()
-        state_json = test_state.model_dump(mode="json")
-        mock_record = _MockInvestigationRecord(
-            case_id="CASE-GET-001", state_json=state_json,
-        )
         with patch(
-            "app.api.routes.investigations._investigation_repo.get_by_case_id",
+            "app.api.routes.investigations._investigation_service.get_investigation",
             new_callable=AsyncMock,
-            return_value=mock_record,
+            return_value=test_state,
         ):
             response = client.get("/api/investigations/CASE-GET-001")
         assert response.json()["case_id"] == "CASE-GET-001"
@@ -145,7 +128,7 @@ class TestUnknownInvestigation:
     def test_returns_http_404(self) -> None:
         """GET returns HTTP 404 for a non-existent investigation."""
         with patch(
-            "app.api.routes.investigations._investigation_repo.get_by_case_id",
+            "app.api.routes.investigations._investigation_service.get_investigation",
             new_callable=AsyncMock,
             return_value=None,
         ):
@@ -155,7 +138,7 @@ class TestUnknownInvestigation:
     def test_404_response_has_detail(self) -> None:
         """404 response includes a detail message."""
         with patch(
-            "app.api.routes.investigations._investigation_repo.get_by_case_id",
+            "app.api.routes.investigations._investigation_service.get_investigation",
             new_callable=AsyncMock,
             return_value=None,
         ):
@@ -174,14 +157,10 @@ class TestPersistedStateRoundTrip:
     def test_case_input_survives(self) -> None:
         """case_input data is preserved in the round trip."""
         test_state = _make_test_state()
-        state_json = test_state.model_dump(mode="json")
-        mock_record = _MockInvestigationRecord(
-            case_id="CASE-GET-001", state_json=state_json,
-        )
         with patch(
-            "app.api.routes.investigations._investigation_repo.get_by_case_id",
+            "app.api.routes.investigations._investigation_service.get_investigation",
             new_callable=AsyncMock,
-            return_value=mock_record,
+            return_value=test_state,
         ):
             response = client.get("/api/investigations/CASE-GET-001")
         state = InvestigationState.model_validate(response.json())
@@ -193,14 +172,10 @@ class TestPersistedStateRoundTrip:
     def test_customer_profile_survives(self) -> None:
         """Customer profile data is preserved in the round trip."""
         test_state = _make_test_state()
-        state_json = test_state.model_dump(mode="json")
-        mock_record = _MockInvestigationRecord(
-            case_id="CASE-GET-001", state_json=state_json,
-        )
         with patch(
-            "app.api.routes.investigations._investigation_repo.get_by_case_id",
+            "app.api.routes.investigations._investigation_service.get_investigation",
             new_callable=AsyncMock,
-            return_value=mock_record,
+            return_value=test_state,
         ):
             response = client.get("/api/investigations/CASE-GET-001")
         state = InvestigationState.model_validate(response.json())
@@ -210,14 +185,10 @@ class TestPersistedStateRoundTrip:
     def test_current_stage_survives(self) -> None:
         """current_stage is preserved in the round trip."""
         test_state = _make_test_state()
-        state_json = test_state.model_dump(mode="json")
-        mock_record = _MockInvestigationRecord(
-            case_id="CASE-GET-001", state_json=state_json,
-        )
         with patch(
-            "app.api.routes.investigations._investigation_repo.get_by_case_id",
+            "app.api.routes.investigations._investigation_service.get_investigation",
             new_callable=AsyncMock,
-            return_value=mock_record,
+            return_value=test_state,
         ):
             response = client.get("/api/investigations/CASE-GET-001")
         state = InvestigationState.model_validate(response.json())
@@ -227,14 +198,10 @@ class TestPersistedStateRoundTrip:
     def test_alert_reason_survives(self) -> None:
         """alert_reason is preserved in the round trip."""
         test_state = _make_test_state()
-        state_json = test_state.model_dump(mode="json")
-        mock_record = _MockInvestigationRecord(
-            case_id="CASE-GET-001", state_json=state_json,
-        )
         with patch(
-            "app.api.routes.investigations._investigation_repo.get_by_case_id",
+            "app.api.routes.investigations._investigation_service.get_investigation",
             new_callable=AsyncMock,
-            return_value=mock_record,
+            return_value=test_state,
         ):
             response = client.get("/api/investigations/CASE-GET-001")
         state = InvestigationState.model_validate(response.json())
@@ -249,14 +216,10 @@ class TestPersistedStateRoundTrip:
         agent_result = run_agent(test_state)
         test_state.context_intelligence = agent_result["context_intelligence"]
 
-        state_json = test_state.model_dump(mode="json")
-        mock_record = _MockInvestigationRecord(
-            case_id="CASE-GET-001", state_json=state_json,
-        )
         with patch(
-            "app.api.routes.investigations._investigation_repo.get_by_case_id",
+            "app.api.routes.investigations._investigation_service.get_investigation",
             new_callable=AsyncMock,
-            return_value=mock_record,
+            return_value=test_state,
         ):
             response = client.get("/api/investigations/CASE-GET-001")
         state = InvestigationState.model_validate(response.json())

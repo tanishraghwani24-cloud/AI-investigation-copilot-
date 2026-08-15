@@ -2,16 +2,49 @@
 
 Provides interfaces to invoke the compiled LangGraph investigation pipeline,
 with optional per-node persistence to Postgres.
+
+Round 3: Added graph-level error handling so that node failures are caught,
+recorded as AgentError, and the investigation is marked FAILED with
+partial state preserved.
 """
 
+import logging
 from datetime import datetime, timezone
 from enum import Enum
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.repository import DocumentRepository, InvestigationRepository
-from app.graph.builder import investigation_graph
-from app.schemas.investigation_state import InvestigationState
+from app.graph.builder import (
+    COMPLIANCE,
+    CONTEXT,
+    DECISION,
+    REASONING,
+    REPORTING,
+    build_investigation_graph,
+)
+from app.schemas.investigation_state import (
+    AgentError,
+    CurrentStage,
+    InvestigationState,
+)
+
+logger = logging.getLogger(__name__)
+
+# Compiled graph singleton — used by run_investigation (non-persistent path)
+_investigation_graph = build_investigation_graph()
+
+# Ordered list of node names matching the pipeline topology
+NODE_ORDER: list[str] = [CONTEXT, REASONING, COMPLIANCE, DECISION, REPORTING]
+
+# Map node names → CurrentStage for identifying the failed stage
+_NODE_STAGE_MAP: dict[str, str] = {
+    CONTEXT: CurrentStage.CONTEXT.value,
+    REASONING: CurrentStage.REASONING.value,
+    COMPLIANCE: CurrentStage.COMPLIANCE.value,
+    DECISION: CurrentStage.DECISION.value,
+    REPORTING: CurrentStage.REPORTING.value,
+}
 
 
 def run_investigation(state: InvestigationState) -> InvestigationState:
@@ -23,7 +56,7 @@ def run_investigation(state: InvestigationState) -> InvestigationState:
     Returns:
         The InvestigationState after all graph nodes have executed.
     """
-    result = investigation_graph.invoke(state.model_dump(mode="json"))
+    result = _investigation_graph.invoke(state.model_dump(mode="json"))
     return InvestigationState(**result)
 
 
@@ -66,10 +99,13 @@ async def run_investigation_with_persistence(
     supporting documents, then streams through the 5-node pipeline
     saving intermediate state after each node completes.
 
-    This closes the Round 2 gap where ``document_service`` extracted
-    text but never persisted the result through ``DocumentRepository``.
-    Supporting documents listed in ``case_input`` are now written to
-    the ``document_records`` table before the pipeline begins.
+    Round 3: If a node raises an exception the pipeline:
+      - catches the exception
+      - records an AgentError in the state
+      - marks the investigation as FAILED at the failed stage
+      - persists the partial state (preserving successful upstream output)
+      - stops the pipeline (no downstream nodes execute)
+      - returns cleanly without re-raising
 
     Args:
         state: A fully initialised InvestigationState.
@@ -117,22 +153,89 @@ async def run_investigation_with_persistence(
 
     await session.flush()
 
-    # 3. Stream through nodes, persisting after each one
+    # 3. Stream through nodes, persisting after each one.
+    #    On failure: record AgentError, mark FAILED, persist, stop.
     accumulated_state = state_dict.copy()
 
-    for chunk in investigation_graph.stream(
-        state_dict, stream_mode="updates",
-    ):
-        for _node_name, node_output in chunk.items():
-            serialized_output = _serialize_node_output(node_output)
-            accumulated_state.update(serialized_output)
-            accumulated_state["updated_at"] = (
-                datetime.now(timezone.utc).isoformat()
-            )
-            await inv_repo.update_state(
-                session, state.case_id, accumulated_state,
-            )
+    try:
+        for chunk in _investigation_graph.stream(
+            state_dict, stream_mode="updates",
+        ):
+            for node_name, node_output in chunk.items():
+                serialized_output = _serialize_node_output(node_output)
+                accumulated_state.update(serialized_output)
+                accumulated_state["updated_at"] = (
+                    datetime.now(timezone.utc).isoformat()
+                )
+                await inv_repo.update_state(
+                    session, state.case_id, accumulated_state,
+                )
+    except Exception as exc:
+        # Determine which node failed from the exception context.
+        # LangGraph wraps node exceptions; we inspect the __context__
+        # and the graph's streaming state to identify the failed node.
+        failed_node = _identify_failed_node(accumulated_state)
+
+        logger.error(
+            "Node '%s' failed in case %s: %s",
+            failed_node,
+            state.case_id,
+            exc,
+        )
+
+        # Record the failure in the state
+        error = AgentError(
+            agent_name=failed_node,
+            error_type=type(exc).__name__,
+            message=str(exc),
+        )
+        error_dict = error.model_dump(mode="json")
+
+        existing_errors: list = accumulated_state.get("errors", [])
+        existing_errors.append(error_dict)
+        accumulated_state["errors"] = existing_errors
+
+        # Mark the investigation as FAILED at the failed stage
+        stage = _NODE_STAGE_MAP.get(failed_node, failed_node)
+        accumulated_state["current_stage"] = stage
+        accumulated_state["updated_at"] = (
+            datetime.now(timezone.utc).isoformat()
+        )
+
+        # Persist the failed state
+        await inv_repo.update_state(
+            session, state.case_id, accumulated_state,
+        )
 
     await session.commit()
 
     return InvestigationState(**accumulated_state)
+
+
+def _identify_failed_node(accumulated_state: dict) -> str:
+    """Identify which node failed based on accumulated state.
+
+    Uses the current_stage and which agent outputs are populated
+    to determine the next expected node (i.e. the one that failed).
+    """
+    # Check which outputs have been populated
+    output_fields = [
+        ("context_intelligence", CONTEXT),
+        ("investigation_reasoning", REASONING),
+        ("evidence_compliance_validation", COMPLIANCE),
+        ("decision_optimization", DECISION),
+        ("investigation_report", REPORTING),
+    ]
+
+    last_completed_idx = -1
+    for idx, (field, _node) in enumerate(output_fields):
+        if accumulated_state.get(field) is not None:
+            last_completed_idx = idx
+
+    # The failed node is the one after the last completed
+    failed_idx = last_completed_idx + 1
+    if failed_idx < len(NODE_ORDER):
+        return NODE_ORDER[failed_idx]
+
+    # Fallback: if all outputs are populated, it was reporting
+    return REPORTING

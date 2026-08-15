@@ -4,7 +4,8 @@ Provides the POST /api/investigations endpoint that returns a
 deterministic InvestigationState built from synthetic Mock Bank data.
 
 Round 3: Adds GET /api/investigations/{case_id} endpoint for polling
-the current persisted investigation state.
+the current persisted investigation state, routed through the
+InvestigationService.
 """
 
 from datetime import datetime, timezone
@@ -12,7 +13,6 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.repository import InvestigationRepository
 from app.db.session import get_db_session
 from app.mock_bank.generator import generate_investigation_data
 from app.schemas.investigation_state import (
@@ -22,14 +22,15 @@ from app.schemas.investigation_state import (
     Transaction,
     create_initial_state,
 )
+from app.services.investigation_service import InvestigationService
 
 router = APIRouter()
 
 # ── Default seed for deterministic generation ────────────────────────
 _DEFAULT_SEED: int = 42
 
-# ── Repository instance ──────────────────────────────────────────────
-_investigation_repo = InvestigationRepository()
+# ── Service instance ─────────────────────────────────────────────────
+_investigation_service = InvestigationService()
 
 
 def _build_investigation_state(seed: int) -> InvestigationState:
@@ -127,6 +128,8 @@ async def get_investigation(
     Polls the persistence layer for the investigation identified by
     ``case_id`` and returns the full InvestigationState.
 
+    Delegates to the InvestigationService for retrieval.
+
     Args:
         case_id: The investigation case identifier.
         db: Async database session (injected).
@@ -137,13 +140,11 @@ async def get_investigation(
     Raises:
         HTTPException 404: If no investigation exists with the given case_id.
     """
-    record = await _investigation_repo.get_by_case_id(db, case_id)
-    if record is None:
+    state = await _investigation_service.get_investigation(case_id, db)
+    if state is None:
         raise HTTPException(
             status_code=404,
             detail=f"Investigation not found: {case_id}",
         )
 
-    # Reconstruct InvestigationState from the persisted JSON
-    state = InvestigationState.model_validate(record.state_json)
     return state
