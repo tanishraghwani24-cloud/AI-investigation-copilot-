@@ -1,11 +1,18 @@
-"""Decision Agent skeleton.
+"""Decision Agent — Gemini-powered decision option generation.
 
-Produces deterministic placeholder DecisionOption objects.
-No AI, no Gemini, no external API calls — all values are hardcoded.
+Takes ``case_input``, ``context_intelligence``, and
+``investigation_reasoning`` from the current ``InvestigationState``,
+sends the investigation data to Gemini via the existing
+``GeminiClient``, and produces exactly FOUR validated
+``DecisionOption`` objects — one for each ``DecisionAction``.
 
-TEMPORARY — Round 2 placeholder output.
-Real Gemini-based decision generation belongs to Round 3.
+Round 3: Option generation only.
+Recommendation selection (recommended_decision) belongs to Round 4.
 """
+
+import logging
+
+from pydantic import BaseModel
 
 from app.schemas.investigation_state import (
     AgentStatus,
@@ -14,157 +21,164 @@ from app.schemas.investigation_state import (
     DecisionOption,
     InvestigationState,
 )
+from app.services.gemini_client import GeminiClientError, get_gemini_client
+
+logger = logging.getLogger(__name__)
+
+
+# ── Private response container ───────────────────────────────────────
+
+
+class _DecisionOptionsResponse(BaseModel):
+    """Container for Gemini structured output.
+
+    This is a module-local helper used exclusively as the
+    ``response_schema`` for ``GeminiClient.generate()``.  It is NOT
+    part of the shared investigation schema.
+    """
+
+    options: list[DecisionOption]
+
+
+# ── Prompt construction ──────────────────────────────────────────────
+
+
+def _build_prompt(state: InvestigationState) -> str:
+    """Build a Gemini prompt from the investigation state.
+
+    Includes serialised case data, context intelligence, and
+    investigation reasoning so the model can produce case-specific
+    decision options.
+    """
+    case_json = state.case_input.model_dump_json(indent=2)
+
+    if state.context_intelligence is not None:
+        context_json = state.context_intelligence.model_dump_json(indent=2)
+    else:
+        context_json = "{}"
+
+    if state.investigation_reasoning is not None:
+        reasoning_json = state.investigation_reasoning.model_dump_json(indent=2)
+    else:
+        reasoning_json = "{}"
+
+    prompt = f"""\
+You are a senior financial crime decision analyst.  Given the
+investigation data below, generate exactly FOUR decision options —
+one for each possible action.
+
+=== CASE DATA ===
+{case_json}
+
+=== CONTEXT INTELLIGENCE ===
+{context_json}
+
+=== INVESTIGATION REASONING ===
+{reasoning_json}
+
+=== INSTRUCTIONS ===
+Respond with a single JSON object (no markdown fences, no extra text)
+that conforms to the following schema:
+
+{{
+  "options": [
+    {{
+      "option_id": "<string – e.g. OPT-ALLOW>",
+      "action": "<one of: ALLOW, HOLD, BLOCK, ESCALATE>",
+      "rationale": "<string – case-specific explanation of why this action could be appropriate>",
+      "confidence": <float between 0.0 and 1.0>,
+      "risk_score": <float between 0.0 and 1.0>,
+      "pros": ["<at least one advantage>"],
+      "cons": ["<at least one disadvantage>"],
+      "risks": ["<at least one named risk>"],
+      "mitigation": ["<at least one mitigation step>"]
+    }}
+  ]
+}}
+
+Rules:
+- You MUST produce exactly 4 options, one for each action: ALLOW, HOLD, BLOCK, ESCALATE.
+- Each action value MUST appear exactly once.
+- All rationales MUST reference specific data from the case, context, or reasoning above.
+- pros, cons, risks, and mitigation MUST each have at least one entry.
+- confidence and risk_score MUST be between 0.0 and 1.0 inclusive.
+- Use option_id values: OPT-ALLOW, OPT-HOLD, OPT-BLOCK, OPT-ESCALATE.
+- Return ONLY the raw JSON object.  No markdown, no commentary.
+"""
+    return prompt
+
+
+# ── Validation ───────────────────────────────────────────────────────
+
+
+_REQUIRED_ACTIONS = frozenset(DecisionAction)
+
+
+def _validate_options(options: list[DecisionOption]) -> None:
+    """Validate that Gemini returned exactly 4 distinct action options.
+
+    Raises:
+        GeminiClientError: If the count is wrong or actions are
+            missing / duplicated.
+    """
+    if len(options) != 4:
+        raise GeminiClientError(
+            f"Expected exactly 4 decision options, got {len(options)}"
+        )
+
+    found_actions = {opt.action for opt in options}
+    if found_actions != _REQUIRED_ACTIONS:
+        missing = _REQUIRED_ACTIONS - found_actions
+        extra = found_actions - _REQUIRED_ACTIONS
+        raise GeminiClientError(
+            f"Decision options have wrong actions. "
+            f"Missing: {missing}, Extra/Duplicate: {extra}"
+        )
+
+
+# ── Public API ────────────────────────────────────────────────────────
 
 
 def decision_agent(state: InvestigationState) -> dict:
-    """Execute the Decision Agent on the given investigation state.
+    """Execute the Decision Agent.
 
-    Produces deterministic placeholder decision options and returns a
-    dict of state updates (compatible with LangGraph node conventions).
+    Reads case data, context intelligence, and investigation
+    reasoning from *state*, constructs a prompt, calls Gemini via
+    ``GeminiClient.generate()``, and wraps the validated
+    ``DecisionOption`` objects in a ``DecisionOptimization``.
+
+    Round 3 produces the four options only.
+    ``recommended_decision`` and ``decision_rationale`` are not
+    set — recommendation selection belongs to Round 4.
 
     Args:
         state: The current investigation state.
 
     Returns:
-        A dict containing ``decision_optimization`` with at least 2
-        distinct placeholder DecisionOption objects.
+        A dict containing ``decision_optimization`` — compatible
+        with LangGraph node update conventions.
     """
+    prompt = _build_prompt(state)
 
-    # TEMPORARY — Round 2 placeholder output.
-    # Real Gemini-based decision generation belongs to Round 3.
-    decision_options = [
-        DecisionOption(
-            option_id="OPT-ALLOW",
-            action=DecisionAction.ALLOW,
-            rationale=(
-                "Pros: No customer friction; preserves relationship with a "
-                "high-value portfolio manager. Cons: Potential regulatory exposure "
-                "if the transaction is illicit; AML EDD has not been completed. "
-                "Mitigation: Post-transaction monitoring with a 30-day review window."
-            ),
-            confidence=0.15,
-            risk_score=0.82,
-            pros=[
-                "No customer friction",
-                "Preserves relationship with high-value client",
-            ],
-            cons=[
-                "Potential regulatory exposure if illicit",
-                "AML enhanced due diligence not completed",
-            ],
-            risks=[
-                "Regulatory sanction if transaction is later found illicit",
-                "Reputational damage from compliance failure",
-            ],
-            mitigation=[
-                "Post-transaction monitoring with 30-day review window",
-                "Flag account for enhanced ongoing due diligence",
-            ],
-        ),
-        DecisionOption(
-            option_id="OPT-HOLD",
-            action=DecisionAction.HOLD,
-            rationale=(
-                "Pros: Prevents fund movement while investigation continues; "
-                "allows time to verify beneficiary identity and obtain source-of-funds "
-                "declaration. Cons: May cause customer inconvenience; 48-hour "
-                "regulatory hold window. Mitigation: Proactive customer outreach "
-                "to expedite verification."
-            ),
-            confidence=0.70,
-            risk_score=0.45,
-            pros=[
-                "Prevents fund movement during investigation",
-                "Allows time for beneficiary verification",
-                "Allows time for source-of-funds declaration",
-            ],
-            cons=[
-                "Customer inconvenience",
-                "48-hour regulatory hold window constraint",
-            ],
-            risks=[
-                "Customer complaint if transaction is legitimate",
-                "Operational delay in processing",
-            ],
-            mitigation=[
-                "Proactive customer outreach to expedite verification",
-                "Assign to priority queue for faster resolution",
-            ],
-        ),
-        DecisionOption(
-            option_id="OPT-BLOCK",
-            action=DecisionAction.BLOCK,
-            rationale=(
-                "Pros: Eliminates risk of fund loss entirely; satisfies strictest "
-                "compliance interpretation. Cons: High customer friction; potential "
-                "reputational damage if the transaction is legitimate; may trigger "
-                "a formal complaint. Mitigation: Offer alternative transfer channel "
-                "after full KYC clearance."
-            ),
-            confidence=0.40,
-            risk_score=0.20,
-            pros=[
-                "Eliminates risk of fund loss entirely",
-                "Satisfies strictest compliance interpretation",
-            ],
-            cons=[
-                "High customer friction",
-                "Potential reputational damage if legitimate",
-                "May trigger formal complaint",
-            ],
-            risks=[
-                "Customer attrition",
-                "Reputational damage if transaction is legitimate",
-            ],
-            mitigation=[
-                "Offer alternative transfer channel after full KYC clearance",
-                "Document compliance rationale for audit trail",
-            ],
-        ),
-        DecisionOption(
-            option_id="OPT-ESCALATE",
-            action=DecisionAction.ESCALATE,
-            rationale=(
-                "Pros: Engages senior fraud analysts and compliance officers for "
-                "a multi-disciplinary review; appropriate for cases with converging "
-                "risk signals. Cons: Longer resolution time; resource-intensive. "
-                "Mitigation: Assign to the high-priority queue for same-day review."
-            ),
-            confidence=0.55,
-            risk_score=0.50,
-            pros=[
-                "Engages senior fraud analysts and compliance officers",
-                "Multi-disciplinary review for complex cases",
-                "Appropriate for converging risk signals",
-            ],
-            cons=[
-                "Longer resolution time",
-                "Resource-intensive process",
-            ],
-            risks=[
-                "Delayed resolution may cause customer frustration",
-                "Senior analyst availability may be limited",
-            ],
-            mitigation=[
-                "Assign to high-priority queue for same-day review",
-                "Set escalation SLA with 4-hour response target",
-            ],
-        ),
-    ]
+    client = get_gemini_client()
+
+    try:
+        response: _DecisionOptionsResponse = client.generate(
+            prompt,
+            response_schema=_DecisionOptionsResponse,
+        )
+    except GeminiClientError:
+        logger.exception("Gemini call failed in decision_agent")
+        raise
+
+    _validate_options(response.options)
 
     decision = DecisionOptimization(
         status=AgentStatus.COMPLETED,
-        decision_options=decision_options,
-        recommended_decision=DecisionAction.HOLD,
-        decision_rationale=(
-            "HOLD is recommended over the other options because it balances risk "
-            "mitigation with customer experience. Unlike BLOCK, it preserves the "
-            "possibility of a legitimate transaction completing after verification. "
-            "Unlike ALLOW, it prevents fund movement while two open compliance "
-            "violations (AML EDD and KYC beneficiary screening) are addressed. "
-            "ESCALATE is a viable secondary option but introduces unnecessary delay "
-            "given that the required verification steps are well-defined."
-        ),
+        decision_options=response.options,
+        # Round 3: option generation only.
+        # recommended_decision and decision_rationale are NOT set.
+        # Recommendation selection belongs to Round 4.
     )
 
     return {
