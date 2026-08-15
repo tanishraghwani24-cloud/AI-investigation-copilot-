@@ -52,6 +52,7 @@ from app.schemas.investigation_state import (
     Transaction,
     create_initial_state,
 )
+from app.agents.reasoning_agent import HypothesesResponse
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────
@@ -74,7 +75,9 @@ MOCK_HYPOTHESIS = Hypothesis(
         "Customer is a known Portfolio Manager with legitimate large-value activity",
     ],
 )
-"""Deterministic hypothesis returned by the mocked Gemini client."""
+
+MOCK_HYPOTHESES_RESPONSE = HypothesesResponse(hypotheses=[MOCK_HYPOTHESIS])
+"""Deterministic hypothesis response returned by the mocked Gemini client."""
 
 
 def _build_test_state() -> "InvestigationState":
@@ -197,9 +200,9 @@ async def db_session():
 
 @pytest.fixture
 def mock_gemini():
-    """Patch get_gemini_client so reasoning_agent returns a deterministic Hypothesis."""
+    """Patch get_gemini_client so reasoning_agent returns a deterministic HypothesesResponse."""
     mock_client = MagicMock()
-    mock_client.generate.return_value = MOCK_HYPOTHESIS
+    mock_client.generate.return_value = MOCK_HYPOTHESES_RESPONSE
 
     with patch(
         "app.agents.reasoning_agent.get_gemini_client",

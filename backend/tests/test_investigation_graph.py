@@ -148,7 +148,8 @@ def test_full_investigation_pipeline() -> None:
     assert result.decision_optimization is not None
     assert result.decision_optimization.status == AgentStatus.COMPLETED
     assert len(result.decision_optimization.decision_options) == 4
-    assert result.decision_optimization.recommended_decision is not None
+    # Round 3: recommendation belongs to Round 4.
+    # assert result.decision_optimization.recommended_decision is not None
     print("[OK] Reporting Agent Complete")
 
     # -- Investigation Report --

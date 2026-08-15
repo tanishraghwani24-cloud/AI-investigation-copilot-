@@ -387,8 +387,8 @@ class TestGraphIntegration:
     def _run_mocked_graph(self) -> InvestigationState:
         """Run the investigation graph with Gemini mocked for both
         the reasoning agent and the decision agent."""
-        from app.agents.tests.test_reasoning_agent_skeleton import (
-            MOCK_HYPOTHESIS,
+        from app.agents.tests.test_reasoning_agent_structured import (
+            MOCK_HYPOTHESES_RESPONSE,
         )
         from app.schemas.investigation_state import (
             Hypothesis,
@@ -397,7 +397,7 @@ class TestGraphIntegration:
 
         # Build mock reasoning response
         mock_reasoning_client = MagicMock()
-        mock_reasoning_client.generate.return_value = MOCK_HYPOTHESIS
+        mock_reasoning_client.generate.return_value = MOCK_HYPOTHESES_RESPONSE
 
         # Build mock decision response
         mock_decision_client = MagicMock()

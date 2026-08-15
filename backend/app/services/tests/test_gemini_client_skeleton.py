@@ -82,8 +82,8 @@ class TestGeminiClientInit:
     @patch("app.services.gemini_client.genai")
     def test_stores_model_name(self, mock_genai: MagicMock) -> None:
         """The model name is stored for use in generate calls."""
-        client = GeminiClient(api_key="k", model_name="gemini-2.0-flash")
-        assert client._model_name == "gemini-2.0-flash"
+        client = GeminiClient(api_key="k", model_name="gemini-3.5-flash")
+        assert client._model_name == "gemini-3.5-flash"
 
 
 # ── generate() — raw text mode ───────────────────────────────────────
@@ -112,11 +112,11 @@ class TestGenerateRawText:
         mock_client = mock_genai.Client.return_value
         mock_client.models.generate_content.return_value = mock_response
 
-        client = GeminiClient(api_key="k", model_name="gemini-2.0-flash")
+        client = GeminiClient(api_key="k", model_name="gemini-3.5-flash")
         client.generate("Summarise this case")
 
         mock_client.models.generate_content.assert_called_once_with(
-            model="gemini-2.0-flash",
+            model="gemini-3.5-flash",
             contents="Summarise this case",
         )
 
@@ -203,7 +203,7 @@ class TestGetGeminiClient:
         self, mock_settings: MagicMock, mock_genai: MagicMock
     ) -> None:
         mock_settings.GEMINI_API_KEY = "env-key-abc"
-        mock_settings.GEMINI_MODEL = "gemini-2.0-flash"
+        mock_settings.GEMINI_MODEL = "gemini-3.5-flash"
 
         client = get_gemini_client()
         assert isinstance(client, GeminiClient)
@@ -238,8 +238,8 @@ class TestConfigIntegration:
         assert "GEMINI_MODEL" in Settings.model_fields
 
     def test_gemini_model_default(self) -> None:
-        """GEMINI_MODEL defaults to gemini-2.0-flash."""
-        assert Settings.model_fields["GEMINI_MODEL"].default == "gemini-2.0-flash"
+        """GEMINI_MODEL defaults to gemini-3.5-flash."""
+        assert Settings.model_fields["GEMINI_MODEL"].default == "gemini-3.5-flash"
 
     def test_gemini_api_key_default_empty(self) -> None:
         """GEMINI_API_KEY defaults to empty string (allows tests to run)."""
