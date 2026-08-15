@@ -6,8 +6,15 @@ inside an ``InvestigationState`` and produces a populated
 
 No LLM.  No Gemini.  No AI.  No database queries.
 All logic is derived from the data already present in the state.
+
+Round 3: Incorporates extracted document evidence from
+``state.case_input.supporting_documents`` into the context synthesis.
+Documents with empty/None extracted_text are ignored.
 """
 
+from __future__ import annotations
+
+import re
 from datetime import timedelta
 
 from app.schemas.investigation_state import (
@@ -17,6 +24,7 @@ from app.schemas.investigation_state import (
     DetectedAnomaly,
     InvestigationState,
     SeverityLevel,
+    SupportingDocument,
     Transaction,
 )
 
@@ -30,6 +38,21 @@ _RAPID_TXN_WINDOW_MINUTES: int = 30
 
 _HIGH_RISK_SCORE_THRESHOLD: float = 0.7
 _MEDIUM_RISK_SCORE_THRESHOLD: float = 0.4
+
+# ── Monetary amount pattern for document evidence extraction ─────────
+_AMOUNT_PATTERN: re.Pattern[str] = re.compile(
+    r"(?:USD|US\$|\$)\s*([\d,]+(?:\.\d{1,2})?)"
+)
+
+# ── Transfer type keywords ───────────────────────────────────────────
+_TRANSFER_KEYWORDS: list[str] = [
+    "wire transfer",
+    "international wire",
+    "domestic wire",
+    "ach transfer",
+    "bank transfer",
+    "remittance",
+]
 
 
 # ── Internal helpers ─────────────────────────────────────────────────
@@ -269,6 +292,139 @@ def _build_context_summary(
     return " ".join(parts)
 
 
+# ── Round 3: Document evidence helpers ───────────────────────────────
+
+
+def _has_meaningful_text(doc: SupportingDocument) -> bool:
+    """Return True if the document has non-empty extracted text."""
+    text = doc.extracted_text
+    if text is None:
+        return False
+    return len(text.strip()) > 0
+
+
+def _extract_document_evidence(doc: SupportingDocument) -> dict:
+    """Extract investigation-relevant evidence from a document.
+
+    Deterministically parses the extracted text for:
+    - Monetary amounts (USD patterns)
+    - Transfer type keywords
+    - Document identification (filename, type)
+
+    Returns a dict with keys:
+        - ``doc_label``: Human-readable document identifier.
+        - ``amounts``: List of monetary amount strings found.
+        - ``transfer_types``: List of transfer type keywords found.
+        - ``summary_snippet``: First 200 characters of extracted text.
+    """
+    text = (doc.extracted_text or "").strip()
+
+    # Document label: prefer file_name, fall back to document_type + id
+    doc_label = doc.file_name or f"{doc.document_type} ({doc.document_id})"
+
+    # Extract monetary amounts
+    amounts: list[str] = []
+    for match in _AMOUNT_PATTERN.finditer(text):
+        raw = match.group(1).replace(",", "")
+        try:
+            float(raw)
+            amounts.append(f"USD {match.group(1)}")
+        except ValueError:
+            pass
+
+    # Detect transfer type keywords (case-insensitive)
+    text_lower = text.lower()
+    transfer_types: list[str] = [
+        kw for kw in _TRANSFER_KEYWORDS if kw in text_lower
+    ]
+
+    # Summary snippet (first 200 chars, collapsed whitespace)
+    collapsed = " ".join(text.split())
+    summary_snippet = collapsed[:200]
+
+    return {
+        "doc_label": doc_label,
+        "amounts": amounts,
+        "transfer_types": transfer_types,
+        "summary_snippet": summary_snippet,
+    }
+
+
+def _build_document_evidence_summary(
+    documents: list[SupportingDocument],
+) -> str:
+    """Build a summary paragraph from document evidence.
+
+    Only documents with meaningful extracted text are included.
+    Returns an empty string if no meaningful documents are available.
+    """
+    meaningful_docs = [d for d in documents if _has_meaningful_text(d)]
+    if not meaningful_docs:
+        return ""
+
+    parts: list[str] = []
+    parts.append(
+        f"Supporting document evidence ({len(meaningful_docs)} "
+        f"document(s)):"
+    )
+
+    for doc in meaningful_docs:
+        evidence = _extract_document_evidence(doc)
+        doc_parts: list[str] = [f"[{evidence['doc_label']}]"]
+
+        if evidence["transfer_types"]:
+            doc_parts.append(
+                f"references {', '.join(evidence['transfer_types'])}"
+            )
+
+        if evidence["amounts"]:
+            doc_parts.append(
+                f"mentions amount(s): {', '.join(evidence['amounts'])}"
+            )
+
+        if not evidence["transfer_types"] and not evidence["amounts"]:
+            # Fall back to a snippet of the extracted text
+            doc_parts.append(
+                f"contains: \"{evidence['summary_snippet']}\""
+            )
+
+        parts.append(" ".join(doc_parts))
+
+    return " ".join(parts)
+
+
+def _build_document_indicators(
+    documents: list[SupportingDocument],
+) -> list[str]:
+    """Build key indicators derived from document evidence.
+
+    Returns an empty list if no meaningful documents are available.
+    """
+    meaningful_docs = [d for d in documents if _has_meaningful_text(d)]
+    if not meaningful_docs:
+        return []
+
+    indicators: list[str] = []
+    indicators.append(
+        f"{len(meaningful_docs)} supporting document(s) with extracted evidence"
+    )
+
+    for doc in meaningful_docs:
+        evidence = _extract_document_evidence(doc)
+
+        for transfer_type in evidence["transfer_types"]:
+            indicators.append(
+                f"Document evidence references {transfer_type}"
+            )
+
+        for amount in evidence["amounts"]:
+            indicators.append(
+                f"Document evidence mentions {amount}"
+            )
+
+    return indicators
+
+
 # ── Public API ────────────────────────────────────────────────────────
 
 
@@ -278,6 +434,9 @@ def context_agent(state: InvestigationState) -> dict:
     Analyses the transactions and customer data inside *state* and
     produces a populated ``ContextIntelligence``.  All logic is pure
     deterministic Python — no LLM, no Gemini, no external services.
+
+    Round 3: Also incorporates extracted evidence from any supporting
+    documents available in ``state.case_input.supporting_documents``.
 
     Args:
         state: The current investigation state.
@@ -289,11 +448,12 @@ def context_agent(state: InvestigationState) -> dict:
     transactions = state.case_input.transactions
     customer = state.case_input.customer_profile
     alert_reason = state.case_input.alert_reason
+    supporting_documents = state.case_input.supporting_documents
 
     customer_name: str | None = customer.name if customer else None
     customer_risk: str | None = customer.risk_rating if customer else None
 
-    # Analyse
+    # Analyse transactions (unchanged Round 2 logic)
     stats = _compute_transaction_stats(transactions)
     large_txns = _find_large_transactions(transactions)
     rapid_pairs = _find_rapid_transaction_pairs(transactions)
@@ -314,6 +474,15 @@ def context_agent(state: InvestigationState) -> dict:
     context_summary = _build_context_summary(
         stats, large_txns, rapid_pairs, customer_name, alert_reason, risk_score,
     )
+
+    # ── Round 3: Document evidence integration ───────────────────
+    doc_summary = _build_document_evidence_summary(supporting_documents)
+    if doc_summary:
+        context_summary = context_summary + " " + doc_summary
+
+    doc_indicators = _build_document_indicators(supporting_documents)
+    if doc_indicators:
+        key_indicators = key_indicators + doc_indicators
 
     context = ContextIntelligence(
         status=AgentStatus.COMPLETED,

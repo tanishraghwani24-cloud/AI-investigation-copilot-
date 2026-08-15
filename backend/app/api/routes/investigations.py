@@ -2,12 +2,18 @@
 
 Provides the POST /api/investigations endpoint that returns a
 deterministic InvestigationState built from synthetic Mock Bank data.
+
+Round 3: Adds GET /api/investigations/{case_id} endpoint for polling
+the current persisted investigation state.
 """
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.repository import InvestigationRepository
+from app.db.session import get_db_session
 from app.mock_bank.generator import generate_investigation_data
 from app.schemas.investigation_state import (
     CaseInput,
@@ -21,6 +27,9 @@ router = APIRouter()
 
 # ── Default seed for deterministic generation ────────────────────────
 _DEFAULT_SEED: int = 42
+
+# ── Repository instance ──────────────────────────────────────────────
+_investigation_repo = InvestigationRepository()
 
 
 def _build_investigation_state(seed: int) -> InvestigationState:
@@ -106,3 +115,35 @@ async def create_investigation() -> InvestigationState:
     populated when the LangGraph pipeline is subsequently executed.
     """
     return _GENERATED_STATE
+
+
+@router.get("/investigations/{case_id}", response_model=InvestigationState)
+async def get_investigation(
+    case_id: str,
+    db: AsyncSession = Depends(get_db_session),
+) -> InvestigationState:
+    """Retrieve the current persisted investigation state.
+
+    Polls the persistence layer for the investigation identified by
+    ``case_id`` and returns the full InvestigationState.
+
+    Args:
+        case_id: The investigation case identifier.
+        db: Async database session (injected).
+
+    Returns:
+        The persisted InvestigationState.
+
+    Raises:
+        HTTPException 404: If no investigation exists with the given case_id.
+    """
+    record = await _investigation_repo.get_by_case_id(db, case_id)
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Investigation not found: {case_id}",
+        )
+
+    # Reconstruct InvestigationState from the persisted JSON
+    state = InvestigationState.model_validate(record.state_json)
+    return state
