@@ -121,7 +121,11 @@ _MOCK_OPTIONS = [
     ),
 ]
 
-_MOCK_RESPONSE = _DecisionOptionsResponse(options=_MOCK_OPTIONS)
+_MOCK_RESPONSE = _DecisionOptionsResponse(
+    options=_MOCK_OPTIONS,
+    recommended_decision=DecisionAction.BLOCK,
+    decision_rationale="Blocking is safest."
+)
 
 
 def _patch_gemini():

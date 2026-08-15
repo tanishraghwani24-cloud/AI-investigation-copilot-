@@ -52,14 +52,16 @@ def mock_gemini_boundary(request):
             )
         elif schema_name == "_DecisionOptionsResponse":
             from app.agents.decision_agent import _DecisionOptionsResponse
-            from app.schemas.investigation_state import DecisionOption
+            from app.schemas.investigation_state import DecisionAction, DecisionOption
             return _DecisionOptionsResponse(
                 options=[
-                    DecisionOption(option_id="OPT-ESCALATE", action="ESCALATE", rationale="a", risk_mitigation=["b"], estimated_impact="c", confidence=0.9, risk_score=0.9, pros=["p"], cons=["c"], risks=["r"], mitigation=["m"]),
-                    DecisionOption(option_id="OPT-APPROVE", action="ALLOW", rationale="a", risk_mitigation=["b"], estimated_impact="c", confidence=0.8, risk_score=0.1, pros=["p"], cons=["c"], risks=["r"], mitigation=["m"]),
-                    DecisionOption(option_id="OPT-HOLD", action="HOLD", rationale="a", risk_mitigation=["b"], estimated_impact="c", confidence=0.8, risk_score=0.5, pros=["p"], cons=["c"], risks=["r"], mitigation=["m"]),
-                    DecisionOption(option_id="OPT-BLOCK", action="BLOCK", rationale="a", risk_mitigation=["b"], estimated_impact="c", confidence=0.8, risk_score=0.8, pros=["p"], cons=["c"], risks=["r"], mitigation=["m"])
-                ]
+                    DecisionOption(option_id="OPT-ESCALATE", action=DecisionAction.ESCALATE, rationale="e", confidence=0.9, risk_score=0.9, pros=["p1", "p2"], cons=["c1", "c2"], risks=["r1", "r2"], mitigation=["m1", "m2"]),
+                    DecisionOption(option_id="OPT-ALLOW", action=DecisionAction.ALLOW, rationale="a", confidence=0.8, risk_score=0.1, pros=["p1", "p2"], cons=["c1", "c2"], risks=["r1", "r2"], mitigation=["m1", "m2"]),
+                    DecisionOption(option_id="OPT-HOLD", action=DecisionAction.HOLD, rationale="h", confidence=0.8, risk_score=0.5, pros=["p1", "p2"], cons=["c1", "c2"], risks=["r1", "r2"], mitigation=["m1", "m2"]),
+                    DecisionOption(option_id="OPT-BLOCK", action=DecisionAction.BLOCK, rationale="b", confidence=0.8, risk_score=0.8, pros=["p1", "p2"], cons=["c1", "c2"], risks=["r1", "r2"], mitigation=["m1", "m2"])
+                ],
+                recommended_decision=DecisionAction.HOLD,
+                decision_rationale="why hold"
             )
         elif schema_name == "InvestigationReport":
             from app.schemas.investigation_state import InvestigationReport, AgentStatus, GraphData

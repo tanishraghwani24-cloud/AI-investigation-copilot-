@@ -46,6 +46,8 @@ from app.schemas.investigation_state import (
     CaseInput,
     CurrentStage,
     CustomerProfile,
+    DecisionAction,
+    DecisionOption,
     Hypothesis,
     SeverityLevel,
     SupportingDocument,
@@ -53,6 +55,7 @@ from app.schemas.investigation_state import (
     create_initial_state,
 )
 from app.agents.reasoning_agent import HypothesesResponse
+from app.agents.decision_agent import _DecisionOptionsResponse
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────
@@ -200,12 +203,75 @@ async def db_session():
 
 @pytest.fixture
 def mock_gemini():
-    """Patch get_gemini_client so reasoning_agent returns a deterministic HypothesesResponse."""
+    """Patch get_gemini_client so Gemini-backed agents stay offline."""
+    mock_decision_options = _DecisionOptionsResponse(
+        options=[
+            DecisionOption(
+                option_id="OPT-ALLOW",
+                action=DecisionAction.ALLOW,
+                rationale="a",
+                confidence=0.20,
+                risk_score=0.78,
+                pros=["p1", "p2"],
+                cons=["c1", "c2"],
+                risks=["r1", "r2"],
+                mitigation=["m1", "m2"],
+            ),
+            DecisionOption(
+                option_id="OPT-HOLD",
+                action=DecisionAction.HOLD,
+                rationale="h",
+                confidence=0.65,
+                risk_score=0.40,
+                pros=["p1", "p2"],
+                cons=["c1", "c2"],
+                risks=["r1", "r2"],
+                mitigation=["m1", "m2"],
+            ),
+            DecisionOption(
+                option_id="OPT-BLOCK",
+                action=DecisionAction.BLOCK,
+                rationale="b",
+                confidence=0.35,
+                risk_score=0.15,
+                pros=["p1", "p2"],
+                cons=["c1", "c2"],
+                risks=["r1", "r2"],
+                mitigation=["m1", "m2"],
+            ),
+            DecisionOption(
+                option_id="OPT-ESCALATE",
+                action=DecisionAction.ESCALATE,
+                rationale="e",
+                confidence=0.50,
+                risk_score=0.30,
+                pros=["p1", "p2"],
+                cons=["c1", "c2"],
+                risks=["r1", "r2"],
+                mitigation=["m1", "m2"],
+            ),
+        ],
+        recommended_decision=DecisionAction.HOLD,
+        decision_rationale="why hold",
+    )
+
+    def _side_effect(prompt, response_schema=None):
+        if response_schema is not None:
+            schema_name = response_schema.__name__
+            if schema_name == "HypothesesResponse":
+                return MOCK_HYPOTHESES_RESPONSE
+            if schema_name == "_DecisionOptionsResponse":
+                return mock_decision_options
+        return "Mock text response"
+
     mock_client = MagicMock()
-    mock_client.generate.return_value = MOCK_HYPOTHESES_RESPONSE
+    mock_client.generate.side_effect = _side_effect
 
     with patch(
         "app.agents.reasoning_agent.get_gemini_client",
+        return_value=mock_client,
+    ), patch(
+        "app.agents.decision_agent.get_gemini_client",
         return_value=mock_client,
     ):
         yield mock_client

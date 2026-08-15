@@ -237,7 +237,7 @@ def mock_gemini():
                 rationale="Test allow rationale",
                 confidence=0.20,
                 risk_score=0.78,
-                pros=["p"], cons=["c"], risks=["r"], mitigation=["m"],
+                pros=["p1", "p2"], cons=["c1", "c2"], risks=["r1", "r2"], mitigation=["m1", "m2"],
             ),
             DecisionOption(
                 option_id="OPT-HOLD",
@@ -245,7 +245,7 @@ def mock_gemini():
                 rationale="Test hold rationale",
                 confidence=0.65,
                 risk_score=0.40,
-                pros=["p"], cons=["c"], risks=["r"], mitigation=["m"],
+                pros=["p1", "p2"], cons=["c1", "c2"], risks=["r1", "r2"], mitigation=["m1", "m2"],
             ),
             DecisionOption(
                 option_id="OPT-BLOCK",
@@ -253,7 +253,7 @@ def mock_gemini():
                 rationale="Test block rationale",
                 confidence=0.35,
                 risk_score=0.15,
-                pros=["p"], cons=["c"], risks=["r"], mitigation=["m"],
+                pros=["p1", "p2"], cons=["c1", "c2"], risks=["r1", "r2"], mitigation=["m1", "m2"],
             ),
             DecisionOption(
                 option_id="OPT-ESCALATE",
@@ -261,9 +261,11 @@ def mock_gemini():
                 rationale="Test escalate rationale",
                 confidence=0.50,
                 risk_score=0.30,
-                pros=["p"], cons=["c"], risks=["r"], mitigation=["m"],
+                pros=["p1", "p2"], cons=["c1", "c2"], risks=["r1", "r2"], mitigation=["m1", "m2"],
             ),
-        ]
+        ],
+        recommended_decision=DecisionAction.HOLD,
+        decision_rationale="Test rationale",
     )
 
     def _side_effect(prompt, response_schema=None):

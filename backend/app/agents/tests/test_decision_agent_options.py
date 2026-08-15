@@ -121,7 +121,11 @@ MOCK_OPTIONS = [
     ),
 ]
 
-MOCK_RESPONSE = _DecisionOptionsResponse(options=MOCK_OPTIONS)
+MOCK_RESPONSE = _DecisionOptionsResponse(
+    options=MOCK_OPTIONS,
+    recommended_decision=DecisionAction.BLOCK,
+    decision_rationale="Blocking is the safest approach given the detected anomalies and high contextual risk score."
+)
 
 
 def _make_context_intelligence() -> ContextIntelligence:
@@ -531,19 +535,24 @@ class TestNoPlaceholders:
 
 
 class TestRound4Boundary:
-    """Round 3 does NOT select a recommended decision."""
+    """Round 4 selects and records a recommended decision."""
 
-    def test_recommended_decision_is_none(self) -> None:
+    def test_recommended_decision_is_populated(self) -> None:
+        """recommended_decision and decision_rationale are set."""
         state = _make_test_state()
-        with _patch_gemini():
+        with patch("app.agents.decision_agent.get_gemini_client") as mock:
+            mock.return_value.generate.return_value = MOCK_RESPONSE
             result = decision_agent(state)
-        assert result["decision_optimization"].recommended_decision is None
 
-    def test_decision_rationale_is_none(self) -> None:
+        assert result["decision_optimization"].recommended_decision == DecisionAction.BLOCK
+        assert result["decision_optimization"].decision_rationale is not None
+
+    def test_decision_rationale_is_populated(self) -> None:
         state = _make_test_state()
-        with _patch_gemini():
+        with patch("app.agents.decision_agent.get_gemini_client") as mock:
+            mock.return_value.generate.return_value = MOCK_RESPONSE
             result = decision_agent(state)
-        assert result["decision_optimization"].decision_rationale is None
+        assert result["decision_optimization"].decision_rationale is not None
 
 
 # ── TEST 10: Decision node delegation ────────────────────────────────
@@ -614,7 +623,11 @@ class TestValidationRejectsMalformed:
 
     def test_agent_raises_on_bad_gemini_output(self) -> None:
         """Agent propagates GeminiClientError from validation."""
-        bad_response = _DecisionOptionsResponse(options=MOCK_OPTIONS[:2])
+        bad_response = _DecisionOptionsResponse(
+            options=MOCK_OPTIONS[:2],
+            recommended_decision=DecisionAction.BLOCK,
+            decision_rationale="Test"
+        )
         state = _make_test_state()
         with _patch_gemini(return_value=bad_response):
             with pytest.raises(GeminiClientError):

@@ -38,6 +38,8 @@ class _DecisionOptionsResponse(BaseModel):
     """
 
     options: list[DecisionOption]
+    recommended_decision: DecisionAction
+    decision_rationale: str
 
 
 # ── Prompt construction ──────────────────────────────────────────────
@@ -65,7 +67,8 @@ def _build_prompt(state: InvestigationState) -> str:
     prompt = f"""\
 You are a senior financial crime decision analyst.  Given the
 investigation data below, generate exactly FOUR decision options —
-one for each possible action.
+one for each possible action. Then, select exactly ONE recommended decision
+from these options and provide a detailed rationale comparing it to the alternatives.
 
 === CASE DATA ===
 {case_json}
@@ -88,19 +91,23 @@ that conforms to the following schema:
       "rationale": "<string – case-specific explanation of why this action could be appropriate>",
       "confidence": <float between 0.0 and 1.0>,
       "risk_score": <float between 0.0 and 1.0>,
-      "pros": ["<at least one advantage>"],
-      "cons": ["<at least one disadvantage>"],
-      "risks": ["<at least one named risk>"],
-      "mitigation": ["<at least one mitigation step>"]
+      "pros": ["<at least two distinct case-specific advantages>"],
+      "cons": ["<at least two distinct case-specific disadvantages>"],
+      "risks": ["<at least two distinct named risks>"],
+      "mitigation": ["<at least two distinct mitigation steps>"]
     }}
-  ]
+  ],
+  "recommended_decision": "<one of: ALLOW, HOLD, BLOCK, ESCALATE>",
+  "decision_rationale": "<string – explanation of why the recommended action is best for this specific case, comparing it against the alternatives>"
 }}
 
 Rules:
 - You MUST produce exactly 4 options, one for each action: ALLOW, HOLD, BLOCK, ESCALATE.
-- Each action value MUST appear exactly once.
+- Each action value MUST appear exactly once in the options array.
+- The recommended_decision MUST be one of the four actions.
+- The decision_rationale MUST compare the recommended decision to the other options based on the case facts.
 - All rationales MUST reference specific data from the case, context, or reasoning above.
-- pros, cons, risks, and mitigation MUST each have at least one entry.
+- pros, cons, risks, and mitigation MUST each have AT LEAST TWO entries. Do not use generic boilerplate.
 - confidence and risk_score MUST be between 0.0 and 1.0 inclusive.
 - Use option_id values: OPT-ALLOW, OPT-HOLD, OPT-BLOCK, OPT-ESCALATE.
 - Return ONLY the raw JSON object.  No markdown, no commentary.
@@ -176,9 +183,8 @@ def decision_agent(state: InvestigationState) -> dict:
     decision = DecisionOptimization(
         status=AgentStatus.COMPLETED,
         decision_options=response.options,
-        # Round 3: option generation only.
-        # recommended_decision and decision_rationale are NOT set.
-        # Recommendation selection belongs to Round 4.
+        recommended_decision=response.recommended_decision,
+        decision_rationale=response.decision_rationale,
     )
 
     return {
