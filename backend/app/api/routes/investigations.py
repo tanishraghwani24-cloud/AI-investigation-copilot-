@@ -4,13 +4,16 @@ Provides the persisted investigation REST API.
 """
 
 from datetime import datetime, timezone
+import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import get_db_session
-from app.mock_bank.generator import generate_investigation_data
+from app.db.session import async_session_factory, get_db_session
+from app.mock_bank.generator import MockBankScenario, generate_investigation_data
 from app.schemas.investigation_state import (
+    AgentStatus,
     CaseInput,
     CustomerProfile,
     InvestigationState,
@@ -21,6 +24,16 @@ from app.schemas.investigation_state import (
 from app.services.investigation_service import InvestigationService
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+class InvestigationRunResponse(BaseModel):
+    """Immediate acknowledgement returned when a run is scheduled."""
+
+    case_id: str
+    status: AgentStatus
+    current_stage: CurrentStage
+    message: str
 
 # ── Default seed for deterministic generation ────────────────────────
 _DEFAULT_SEED: int = 42
@@ -29,7 +42,10 @@ _DEFAULT_SEED: int = 42
 _investigation_service = InvestigationService()
 
 
-def _build_investigation_state(seed: int) -> InvestigationState:
+def _build_investigation_state(
+    seed: int,
+    scenario: MockBankScenario | str = MockBankScenario.DEFAULT,
+) -> InvestigationState:
     """Build an InvestigationState from generated Mock Bank data.
 
     Maps mock_bank models into the schema-layer types used by the
@@ -42,7 +58,7 @@ def _build_investigation_state(seed: int) -> InvestigationState:
         A fully initialised InvestigationState ready for pipeline
         execution.
     """
-    data = generate_investigation_data(seed)
+    data = generate_investigation_data(seed, scenario=scenario)
     customer = data.customer
     account = data.account
 
@@ -93,13 +109,17 @@ def _build_investigation_state(seed: int) -> InvestigationState:
     )
 
     # Use deterministic case ID from seed
+    selected_scenario = MockBankScenario(scenario)
     case_id = f"CASE-2025-{seed:05d}"
+    if selected_scenario is not MockBankScenario.DEFAULT:
+        case_id = f"{case_id}-{selected_scenario.value.upper()}"
 
     return create_initial_state(case_id=case_id, case_input=case_input)
 
 
 @router.post("/investigations", response_model=InvestigationState)
 async def create_investigation(
+    scenario: MockBankScenario = Query(default=MockBankScenario.DEFAULT),
     db: AsyncSession = Depends(get_db_session),
 ) -> InvestigationState:
     """Create a new investigation case.
@@ -107,7 +127,7 @@ async def create_investigation(
     Persists a deterministic Mock Bank case input (seed=42). Agent outputs
     are populated only when the investigation is subsequently run.
     """
-    state = _build_investigation_state(_DEFAULT_SEED)
+    state = _build_investigation_state(_DEFAULT_SEED, scenario=scenario)
     return await _investigation_service.create_investigation(
         state.case_id,
         state.case_input,
@@ -163,19 +183,63 @@ async def get_investigation(
     return state
 
 
+async def _run_investigation_background(case_id: str) -> None:
+    """Execute a scheduled investigation using an independent DB session."""
+    try:
+        async with async_session_factory() as session:
+            try:
+                state = await _investigation_service.run_investigation(case_id, session)
+                if state is None:
+                    logger.error("Scheduled investigation disappeared: %s", case_id)
+                await session.commit()
+            except Exception as exc:
+                await session.rollback()
+                try:
+                    await _investigation_service.record_background_failure(
+                        case_id,
+                        exc,
+                        session,
+                    )
+                    await session.commit()
+                except Exception:
+                    await session.rollback()
+                    logger.exception(
+                        "Could not persist background failure for investigation %s",
+                        case_id,
+                    )
+                logger.exception("Background investigation failed: %s", case_id)
+    except Exception:
+        logger.exception("Could not open a session for investigation %s", case_id)
+
+
 @router.post(
     "/investigations/{case_id}/run",
-    response_model=InvestigationState,
+    response_model=InvestigationRunResponse,
+    status_code=202,
 )
 async def run_investigation(
     case_id: str,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db_session),
-) -> InvestigationState:
-    """Synchronously execute the existing investigation's graph pipeline."""
-    state = await _investigation_service.run_investigation(case_id, db)
-    if state is None:
+) -> InvestigationRunResponse:
+    """Acknowledge a run and execute the existing graph in the background."""
+    started = await _investigation_service.start_investigation(case_id, db)
+    if started is None:
         raise HTTPException(
             status_code=404,
             detail=f"Investigation not found: {case_id}",
         )
-    return state
+
+    state, scheduled = started
+    if scheduled:
+        background_tasks.add_task(_run_investigation_background, case_id)
+        message = "Investigation execution started in the background. Poll this resource for progress."
+    else:
+        message = "Investigation execution is already in progress. Poll this resource for progress."
+
+    return InvestigationRunResponse(
+        case_id=state.case_id,
+        status=AgentStatus.IN_PROGRESS,
+        current_stage=state.current_stage,
+        message=message,
+    )

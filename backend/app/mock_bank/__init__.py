@@ -7,6 +7,7 @@ generator for producing synthetic banking data.
 
 from app.mock_bank.generator import (
     MockBankData,
+    MockBankScenario,
     generate_account,
     generate_alert,
     generate_customer,
@@ -16,6 +17,7 @@ from app.mock_bank.generator import (
 
 __all__ = [
     "MockBankData",
+    "MockBankScenario",
     "generate_account",
     "generate_alert",
     "generate_customer",

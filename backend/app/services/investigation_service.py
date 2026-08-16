@@ -8,13 +8,17 @@ Round 3: Tanish — service layer completion.
 """
 
 import logging
+from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.repository import InvestigationRepository
 from app.graph.workflow import run_investigation_with_persistence
 from app.schemas.investigation_state import (
+    AgentError,
+    AgentStatus,
     CaseInput,
+    ContextIntelligence,
     CurrentStage,
     InvestigationState,
     create_initial_state,
@@ -147,3 +151,83 @@ class InvestigationService:
 
         logger.info("Starting investigation pipeline for existing case %s", case_id)
         return await run_investigation_with_persistence(state, session)
+
+    async def start_investigation(
+        self,
+        case_id: str,
+        session: AsyncSession,
+    ) -> tuple[InvestigationState, bool] | None:
+        """Persist an in-progress marker before scheduling a graph run.
+
+        Returns the current state and whether a new execution should be
+        scheduled.  A second trigger received while the first run is in
+        progress is acknowledged without starting a competing pipeline.
+        """
+        state = await self.get_investigation(case_id, session)
+        if state is None:
+            return None
+
+        if self._is_running(state):
+            return state, False
+
+        # The schema has no separate overall-running status.  The first
+        # agent's existing status field and current stage provide the
+        # persisted marker without adding a new schema contract.
+        state.context_intelligence = ContextIntelligence(
+            status=AgentStatus.IN_PROGRESS,
+        )
+        state.current_stage = CurrentStage.CONTEXT
+        state.updated_at = datetime.now(timezone.utc)
+        await self._repo.update_state(
+            session,
+            case_id,
+            state.model_dump(mode="json"),
+        )
+        await session.commit()
+        return state, True
+
+    async def record_background_failure(
+        self,
+        case_id: str,
+        error: Exception,
+        session: AsyncSession,
+    ) -> InvestigationState | None:
+        """Persist an exception raised outside workflow error handling."""
+        state = await self.get_investigation(case_id, session)
+        if state is None:
+            return None
+
+        state.errors.append(
+            AgentError(
+                agent_name="investigation",
+                error_type=type(error).__name__,
+                message=f"Background execution failed: {error}",
+            )
+        )
+        if (
+            state.context_intelligence is not None
+            and state.context_intelligence.status == AgentStatus.IN_PROGRESS
+        ):
+            state.context_intelligence.status = AgentStatus.FAILED
+        state.updated_at = datetime.now(timezone.utc)
+        await self._repo.update_state(
+            session,
+            case_id,
+            state.model_dump(mode="json"),
+        )
+        return state
+
+    @staticmethod
+    def _is_running(state: InvestigationState) -> bool:
+        """Return whether any persisted agent marker says the case is running."""
+        agent_outputs = (
+            state.context_intelligence,
+            state.investigation_reasoning,
+            state.evidence_compliance_validation,
+            state.decision_optimization,
+            state.investigation_report,
+        )
+        return any(
+            output is not None and output.status == AgentStatus.IN_PROGRESS
+            for output in agent_outputs
+        )

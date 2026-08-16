@@ -115,6 +115,31 @@ def test_create_investigation_persists_initial_state(api_client: TestClient) -> 
     create.assert_awaited_once()
 
 
+def test_create_investigation_accepts_explicit_scenario(api_client: TestClient) -> None:
+    high_risk = investigation_routes._build_investigation_state(
+        42,
+        scenario="high-risk",
+    )
+    with patch.object(
+        investigation_routes._investigation_service,
+        "create_investigation",
+        new=AsyncMock(return_value=high_risk),
+    ):
+        response = api_client.post("/api/investigations?scenario=high-risk")
+
+    assert response.status_code == 200
+    state = InvestigationState.model_validate(response.json())
+    assert state.case_id.endswith("HIGH-RISK")
+    assert state.case_input.customer_profile is not None
+    assert state.case_input.customer_profile.risk_rating == "HIGH"
+
+
+def test_create_investigation_rejects_invalid_scenario(api_client: TestClient) -> None:
+    response = api_client.post("/api/investigations?scenario=invalid")
+
+    assert response.status_code == 422
+
+
 def test_get_returns_the_persisted_investigation_not_hardcoded(
     api_client: TestClient,
 ) -> None:
@@ -197,33 +222,31 @@ def test_list_supports_status_filtering(api_client: TestClient) -> None:
 
 
 def test_run_investigation_returns_finalized_decision(api_client: TestClient) -> None:
-    completed = _state("CASE-RUN-1", final_decision=True)
+    started = _state("CASE-RUN-1")
     with patch.object(
         investigation_routes._investigation_service,
-        "run_investigation",
-        new=AsyncMock(return_value=completed),
-    ) as run:
+        "start_investigation",
+        new=AsyncMock(return_value=(started, True)),
+    ) as start, patch.object(
+        investigation_routes,
+        "_run_investigation_background",
+        new=AsyncMock(),
+    ) as background:
         response = api_client.post("/api/investigations/CASE-RUN-1/run")
 
-    assert response.status_code == 200
-    state = InvestigationState.model_validate(response.json())
-    assert state.decision_optimization is not None
-    assert len(state.decision_optimization.decision_options) == 4
-    assert state.decision_optimization.recommended_decision == DecisionAction.HOLD
-    assert state.decision_optimization.decision_rationale is not None
-    assert sum(
-        option.action == state.decision_optimization.recommended_decision
-        for option in state.decision_optimization.decision_options
-    ) == 1
-    assert all(option.pros and option.cons and option.risks and option.mitigation
-               for option in state.decision_optimization.decision_options)
-    run.assert_awaited_once()
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["case_id"] == "CASE-RUN-1"
+    assert payload["status"] == "IN_PROGRESS"
+    assert "background" in payload["message"]
+    start.assert_awaited_once()
+    background.assert_awaited_once_with("CASE-RUN-1")
 
 
 def test_run_nonexistent_investigation_returns_404(api_client: TestClient) -> None:
     with patch.object(
         investigation_routes._investigation_service,
-        "run_investigation",
+        "start_investigation",
         new=AsyncMock(return_value=None),
     ):
         response = api_client.post("/api/investigations/CASE-MISSING/run")

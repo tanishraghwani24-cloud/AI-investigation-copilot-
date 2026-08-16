@@ -8,6 +8,7 @@ identical output.  No external APIs, no AI — pure Python.
 import random
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from enum import Enum
 
 from app.mock_bank.models import Account, Customer, Transaction
 
@@ -80,6 +81,15 @@ class MockBankData:
     account: Account
     transactions: list[Transaction]
     alert_reason: str
+
+
+class MockBankScenario(str, Enum):
+    """Deterministic input profiles supported by the Mock Bank generator."""
+
+    DEFAULT = "default"
+    HIGH_RISK = "high-risk"
+    LOW_RISK = "low-risk"
+    MISSING_DATA = "missing-data"
 
 
 # ============================================================
@@ -272,7 +282,10 @@ def generate_alert(seed: int, transactions: list[Transaction]) -> str:
 # ============================================================
 
 
-def generate_investigation_data(seed: int) -> MockBankData:
+def generate_investigation_data(
+    seed: int,
+    scenario: MockBankScenario | str = MockBankScenario.DEFAULT,
+) -> MockBankData:
     """Generate a complete set of Mock Bank data for one investigation.
 
     Produces a Customer, Account, list of Transactions, and an alert
@@ -284,11 +297,96 @@ def generate_investigation_data(seed: int) -> MockBankData:
     Returns:
         A ``MockBankData`` dataclass with all generated data.
     """
+    try:
+        selected_scenario = MockBankScenario(scenario)
+    except (TypeError, ValueError) as exc:
+        valid = ", ".join(item.value for item in MockBankScenario)
+        raise ValueError(
+            f"Unknown Mock Bank scenario {scenario!r}; expected one of: {valid}"
+        ) from exc
+
     # Use offset seeds so sub-generators produce independent sequences
     customer = generate_customer(seed)
     account = generate_account(seed + 1000, customer.customer_id)
     transactions = generate_transactions(seed + 2000, account.account_id)
     alert_reason = generate_alert(seed, transactions)
+
+    if selected_scenario is MockBankScenario.HIGH_RISK:
+        customer = customer.model_copy(
+            update={
+                "risk_rating": "HIGH",
+                "occupation": "Cash-intensive business owner",
+            }
+        )
+        account = account.model_copy(update={"balance": 8_500.00})
+        high_risk_amounts = [48_000.00, 52_500.00, 67_500.00, 41_250.00, 59_900.00]
+        transactions = [
+            transaction.model_copy(
+                update={
+                    "amount": high_risk_amounts[index],
+                    "transaction_type": "WIRE",
+                    "channel": "ONLINE",
+                    "description": "Rapid cross-border transfer",
+                    "location": "Offshore routing hub",
+                }
+            )
+            for index, transaction in enumerate(transactions)
+        ]
+        alert_reason = generate_alert(seed, transactions)
+
+    elif selected_scenario is MockBankScenario.LOW_RISK:
+        customer = customer.model_copy(
+            update={
+                "risk_rating": "LOW",
+                "occupation": "University professor",
+            }
+        )
+        account = account.model_copy(update={"balance": 42_000.00})
+        low_risk_amounts = [125.00, 780.00, 2_400.00, 315.00, 860.00]
+        low_risk_descriptions = [
+            "Payroll deposit",
+            "Monthly rent payment",
+            "Utility payment",
+            "Grocery purchase",
+            "Insurance premium",
+        ]
+        transactions = [
+            transaction.model_copy(
+                update={
+                    "amount": low_risk_amounts[index],
+                    "transaction_type": "ACH" if index < 3 else "CARD",
+                    "channel": "BRANCH" if index == 1 else "ONLINE",
+                    "description": low_risk_descriptions[index],
+                    "location": "New York, US",
+                }
+            )
+            for index, transaction in enumerate(transactions)
+        ]
+        alert_reason = "Routine account activity selected for low-risk review."
+
+    elif selected_scenario is MockBankScenario.MISSING_DATA:
+        customer = customer.model_copy(
+            update={
+                "email": None,
+                "phone": None,
+                "date_of_birth": None,
+                "address": None,
+                "occupation": None,
+                "nationality": None,
+                "risk_rating": None,
+            }
+        )
+        account = account.model_copy(update={"opened_at": None})
+        transactions = [
+            transaction.model_copy(
+                update={
+                    "description": None,
+                    "location": None,
+                }
+            )
+            for transaction in transactions[:2]
+        ]
+        alert_reason = "Partial transaction record requires additional evidence."
 
     return MockBankData(
         customer=customer,

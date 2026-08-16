@@ -25,6 +25,7 @@ from app.graph.builder import (
 )
 from app.schemas.investigation_state import (
     AgentError,
+    AgentStatus,
     CurrentStage,
     InvestigationState,
 )
@@ -207,6 +208,19 @@ async def run_investigation_with_persistence(
         # Mark the investigation as FAILED at the failed stage
         stage = _NODE_STAGE_MAP.get(failed_node, failed_node)
         accumulated_state["current_stage"] = stage
+        failed_field = {
+            CONTEXT: "context_intelligence",
+            REASONING: "investigation_reasoning",
+            COMPLIANCE: "evidence_compliance_validation",
+            DECISION: "decision_optimization",
+            REPORTING: "investigation_report",
+        }.get(failed_node)
+        failed_output = accumulated_state.get(failed_field) if failed_field else None
+        if (
+            isinstance(failed_output, dict)
+            and failed_output.get("status") == AgentStatus.IN_PROGRESS.value
+        ):
+            failed_output["status"] = AgentStatus.FAILED.value
         accumulated_state["updated_at"] = (
             datetime.now(timezone.utc).isoformat()
         )
@@ -236,7 +250,18 @@ def _identify_failed_node(accumulated_state: dict) -> str:
 
     last_completed_idx = -1
     for idx, (field, _node) in enumerate(output_fields):
-        if accumulated_state.get(field) is not None:
+        output = accumulated_state.get(field)
+        if output is None:
+            continue
+        if isinstance(output, dict) and output.get("status") == AgentStatus.IN_PROGRESS.value:
+            continue
+        if isinstance(output, dict) and output.get("status") not in (
+            None,
+            AgentStatus.COMPLETED.value,
+            AgentStatus.FAILED.value,
+        ):
+            continue
+        if output is not None:
             last_completed_idx = idx
 
     # The failed node is the one after the last completed
