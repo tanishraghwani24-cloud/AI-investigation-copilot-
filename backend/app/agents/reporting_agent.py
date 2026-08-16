@@ -17,7 +17,12 @@ from app.schemas.investigation_state import (
 
 def _value(value: object) -> str:
     """Render optional state values without inventing a replacement value."""
-    return str(value) if value is not None else "Unavailable"
+    return str(value) if value is not None and str(value) else "Unavailable"
+
+
+def _items(values: list[str], empty: str = "None provided") -> str:
+    """Render supplied values while making missing upstream data explicit."""
+    return "; ".join(str(value) for value in values if value) or empty
 
 
 def _build_entity_graph(state: InvestigationState) -> GraphData:
@@ -186,7 +191,7 @@ def _build_timeline(state: InvestigationState) -> list[TimelineEvent]:
 
 
 def reporting_agent(state: InvestigationState) -> dict:
-    """Assemble a report from upstream outputs without recomputing them."""
+    """Assemble a polished, evidence-aware report without recomputing agents."""
     case_input = state.case_input
     customer = case_input.customer_profile
     context = state.context_intelligence
@@ -225,20 +230,84 @@ def reporting_agent(state: InvestigationState) -> dict:
         f"Investigation {state.case_id} covers {len(transactions)} transaction(s) "
         f"totalling {total_amount:g}. Customer: {_value(customer.name if customer else None)}. "
         f"Context summary: {_value(context.context_summary if context else None)} "
-        f"Recommended decision: {_value(recommendation)}."
+        f"Recommended decision: {_value(recommendation)}. "
+        f"Evidence gaps identified: {len(compliance.evidence_gaps) if compliance else 0}."
     )
-    detailed_narrative = "\n".join([
-        f"Case identity: {state.case_id}.",
-        f"Alert reason: {_value(case_input.alert_reason)}.",
-        f"Customer: {_value(customer.name if customer else None)} ({_value(customer.customer_id if customer else None)}).",
-        f"Transactions: {', '.join(transaction.transaction_id for transaction in transactions) or 'Unavailable'}.",
-        f"Context indicators: {', '.join(context.key_indicators) if context and context.key_indicators else 'Unavailable'}.",
-        f"Hypotheses: {'; '.join(f'{item.title} ({item.confidence:g})' for item in hypotheses) or 'Unavailable'}.",
-        f"Compliance findings: {'; '.join(item.regulation_name for item in mappings) or 'Unavailable'}.",
-        f"Evidence references: {', '.join(evidence_references) or 'Unavailable'}.",
-        f"Recommended decision: {_value(recommendation)}.",
-        f"Decision rationale: {_value(rationale)}.",
-    ])
+    narrative = [
+        "## Final synthesis",
+        f"This report consolidates the available case material and upstream findings for case {state.case_id}.",
+        f"The current recommendation is {_value(recommendation)}; its stated rationale is {_value(rationale)}.",
+        (
+            f"The conclusion remains subject to {len(compliance.evidence_gaps)} documented evidence gap(s), listed below."
+            if compliance and compliance.evidence_gaps
+            else "No evidence gaps were identified by the available compliance output."
+        ),
+        "",
+        "## Case information",
+        f"- Case ID: {state.case_id}",
+        f"- Alert reason: {_value(case_input.alert_reason)}",
+        f"- Customer: {_value(customer.name if customer else None)} ({_value(customer.customer_id if customer else None)})",
+        "- Transactions:",
+    ]
+    narrative.extend(
+        f"  - {transaction.transaction_id}: {transaction.amount:g} {transaction.currency}; "
+        f"{transaction.transaction_type}; {transaction.sender_account} → {transaction.receiver_account}; "
+        f"{transaction.timestamp.isoformat()}"
+        for transaction in transactions
+    )
+    if not transactions:
+        narrative.append("  - None provided")
+    if case_input.merchant_info:
+        merchant = case_input.merchant_info
+        narrative.append(f"- Merchant: {merchant.name} ({merchant.merchant_id}); category={merchant.category}; country={_value(merchant.country)}")
+    if case_input.beneficiary_info:
+        beneficiary = case_input.beneficiary_info
+        narrative.append(f"- Beneficiary: {beneficiary.name} ({beneficiary.beneficiary_id}); country={_value(beneficiary.country)}; new={beneficiary.is_new}")
+    if case_input.device_info:
+        device = case_input.device_info
+        narrative.append(f"- Device: {_value(device.device_id)}; type={_value(device.device_type)}; known={device.is_known_device}")
+    narrative.append("- Supporting documents:")
+    narrative.extend(
+        f"  - {document.document_id}: {document.document_type}; file={_value(document.file_name)}; "
+        f"references={_items(document.evidence_references)}"
+        for document in case_input.supporting_documents
+    )
+    if not case_input.supporting_documents:
+        narrative.append("  - None provided")
+
+    narrative.extend(["", "## Context and reasoning findings", f"- Context summary: {_value(context.context_summary if context else None)}", f"- Context risk score: {_value(context.risk_score if context else None)}", f"- Key indicators: {_items(context.key_indicators if context else [])}"])
+    if context and context.anomalies:
+        narrative.append("- Anomalies:")
+        narrative.extend(f"  - {item.anomaly_id} ({item.anomaly_type.value}, {item.severity.value}): {item.description}; related transactions={_items(item.related_transactions)}" for item in context.anomalies)
+    else:
+        narrative.append("- Anomalies: None provided")
+    narrative.extend([f"- Reasoning summary: {_value(reasoning.reasoning_summary if reasoning else None)}", "- Hypotheses:"])
+    if hypotheses:
+        for item in hypotheses:
+            narrative.extend([f"  - {item.hypothesis_id}: {item.title} (confidence {item.confidence:g})", f"    - Finding: {item.description}", f"    - Supporting evidence: {_items(item.supporting_evidence)}", f"    - Contradicting evidence: {_items(item.contradicting_evidence)}"])
+    else:
+        narrative.append("  - None provided")
+    if reasoning:
+        narrative.append(f"- Recommended actions from reasoning: {_items(reasoning.recommended_actions)}")
+
+    narrative.extend(["", "## Compliance and evidence traceability", f"- Compliance validation summary: {_value(compliance.validation_summary if compliance else None)}", "- Compliance mappings:"])
+    if mappings:
+        for item in mappings:
+            narrative.extend([f"  - {item.regulation_id} — {item.regulation_name}", f"    - Description: {_value(item.description)}", f"    - Violation status: {'VIOLATED' if item.is_violated else 'NOT ESTABLISHED'}", f"    - Severity: {item.severity.value}"])
+            narrative.append(f"    - Evidence references: {_items(item.evidence_references)}" if item.evidence_references else "    - Evidence status: Insufficient evidence — no evidence references were supplied for this compliance mapping.")
+    else:
+        narrative.append("  - None provided")
+    narrative.append(f"- Evidence gaps: {_items(compliance.evidence_gaps if compliance else [], 'None identified by the compliance stage')}")
+
+    narrative.extend(["", "## Decision assessment", f"- Recommended decision: {_value(recommendation)}", f"- Decision rationale: {_value(rationale)}", "- Available decision options:"])
+    if decision and decision.decision_options:
+        for item in decision.decision_options:
+            narrative.extend([f"  - {item.action.value} (confidence {item.confidence:g}; risk score {_value(item.risk_score)})", f"    - Rationale: {item.rationale}", f"    - Pros: {_items(item.pros)}", f"    - Cons: {_items(item.cons)}", f"    - Risks: {_items(item.risks)}", f"    - Mitigations: {_items(item.mitigation)}"])
+    else:
+        narrative.append("  - None provided")
+
+    narrative.extend(["", "## Evidence and provenance", f"- Evidence references available across case input and upstream findings: {_items(evidence_references)}", "- Evidence references are reproduced from upstream inputs; this report does not infer additional evidence."])
+    detailed_narrative = "\n".join(narrative)
 
     return {
         "investigation_report": InvestigationReport(
