@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     # --- Gemini / LLM Settings ---
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-3.5-flash"
+    GEMINI_TIMEOUT_SECONDS: float = 30.0
+    GEMINI_MAX_RETRIES: int = 3
+    GEMINI_BACKOFF_BASE_SECONDS: float = 0.5
+    GEMINI_BACKOFF_MAX_SECONDS: float = 8.0
+    GEMINI_STRUCTURED_CORRECTION_RETRIES: int = 1
 
     model_config = {
         "env_file": ".env",
