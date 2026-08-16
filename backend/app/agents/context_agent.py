@@ -438,6 +438,10 @@ def context_agent(state: InvestigationState) -> dict:
     Round 3: Also incorporates extracted evidence from any supporting
     documents available in ``state.case_input.supporting_documents``.
 
+    Round 5: Graceful degradation for sparse-data investigations —
+    handles zero documents, missing/partial customer profiles, and
+    partial Mock Bank data without raising errors.
+
     Args:
         state: The current investigation state.
 
@@ -445,13 +449,18 @@ def context_agent(state: InvestigationState) -> dict:
         A dict containing ``context_intelligence`` — compatible with
         LangGraph node update conventions.
     """
-    transactions = state.case_input.transactions
+    # ── Round 5: Defensive data access ───────────────────────────
+    # Coalesce to empty lists if the field is unexpectedly None.
+    transactions = state.case_input.transactions or []
+    supporting_documents = state.case_input.supporting_documents or []
+
     customer = state.case_input.customer_profile
     alert_reason = state.case_input.alert_reason
-    supporting_documents = state.case_input.supporting_documents
 
-    customer_name: str | None = customer.name if customer else None
-    customer_risk: str | None = customer.risk_rating if customer else None
+    # Safely access optional customer fields — customer may be None
+    # or present with only required fields populated.
+    customer_name: str | None = getattr(customer, "name", None) if customer else None
+    customer_risk: str | None = getattr(customer, "risk_rating", None) if customer else None
 
     # Analyse transactions (unchanged Round 2 logic)
     stats = _compute_transaction_stats(transactions)
