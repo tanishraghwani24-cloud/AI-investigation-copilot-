@@ -120,8 +120,14 @@ async def run_investigation_with_persistence(
 
     state_dict = state.model_dump(mode="json")
 
-    # 1. Persist initial investigation case
-    await inv_repo.create(session, state.case_id, state_dict)
+    # 1. Persist initial investigation case.  A trigger may run a case that
+    # already exists, so refresh its saved state instead of creating a second
+    # row with the same unique case_id.
+    existing_case = await inv_repo.get_by_case_id(session, state.case_id)
+    if existing_case is None:
+        await inv_repo.create(session, state.case_id, state_dict)
+    else:
+        await inv_repo.update_state(session, state.case_id, state_dict)
 
     # 2. Persist any attached supporting documents
     #    This closes the gap where document_service.py returns extraction

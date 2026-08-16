@@ -1,16 +1,11 @@
 """Investigation API routes.
 
-Provides the POST /api/investigations endpoint that returns a
-deterministic InvestigationState built from synthetic Mock Bank data.
-
-Round 3: Adds GET /api/investigations/{case_id} endpoint for polling
-the current persisted investigation state, routed through the
-InvestigationService.
+Provides the persisted investigation REST API.
 """
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
@@ -20,6 +15,7 @@ from app.schemas.investigation_state import (
     CustomerProfile,
     InvestigationState,
     Transaction,
+    CurrentStage,
     create_initial_state,
 )
 from app.services.investigation_service import InvestigationService
@@ -102,20 +98,37 @@ def _build_investigation_state(seed: int) -> InvestigationState:
     return create_initial_state(case_id=case_id, case_input=case_input)
 
 
-# Pre-build for deterministic endpoint responses
-_GENERATED_STATE: InvestigationState = _build_investigation_state(_DEFAULT_SEED)
-
-
 @router.post("/investigations", response_model=InvestigationState)
-async def create_investigation() -> InvestigationState:
+async def create_investigation(
+    db: AsyncSession = Depends(get_db_session),
+) -> InvestigationState:
     """Create a new investigation case.
 
-    Returns a deterministic InvestigationState built from synthetic
-    Mock Bank data (seed=42).  The case input contains generated
-    customer, account, and transaction data.  Agent outputs are
-    populated when the LangGraph pipeline is subsequently executed.
+    Persists a deterministic Mock Bank case input (seed=42). Agent outputs
+    are populated only when the investigation is subsequently run.
     """
-    return _GENERATED_STATE
+    state = _build_investigation_state(_DEFAULT_SEED)
+    return await _investigation_service.create_investigation(
+        state.case_id,
+        state.case_input,
+        db,
+    )
+
+
+@router.get("/investigations", response_model=list[InvestigationState])
+async def list_investigations(
+    status: CurrentStage | None = Query(default=None),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db_session),
+) -> list[InvestigationState]:
+    """List persisted investigations with optional stage filtering."""
+    return await _investigation_service.list_investigations(
+        db,
+        status=status,
+        offset=offset,
+        limit=limit,
+    )
 
 
 @router.get("/investigations/{case_id}", response_model=InvestigationState)
@@ -147,4 +160,22 @@ async def get_investigation(
             detail=f"Investigation not found: {case_id}",
         )
 
+    return state
+
+
+@router.post(
+    "/investigations/{case_id}/run",
+    response_model=InvestigationState,
+)
+async def run_investigation(
+    case_id: str,
+    db: AsyncSession = Depends(get_db_session),
+) -> InvestigationState:
+    """Synchronously execute the existing investigation's graph pipeline."""
+    state = await _investigation_service.run_investigation(case_id, db)
+    if state is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Investigation not found: {case_id}",
+        )
     return state

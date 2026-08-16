@@ -19,12 +19,13 @@ Round 2 changes:
 import io
 import shutil
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.db.session import get_db_session
+from app.api.routes import investigations as investigation_routes
 from app.main import app
 from app.schemas.investigation_state import ProcessingStatus, SupportingDocument
 
@@ -320,7 +321,13 @@ class TestExistingEndpointsStillWork:
 
     def test_investigations_still_works(self) -> None:
         """POST /api/investigations returns HTTP 200."""
-        response = client.post("/api/investigations")
+        persisted_state = investigation_routes._build_investigation_state(42)
+        with patch.object(
+            investigation_routes._investigation_service,
+            "create_investigation",
+            new=AsyncMock(return_value=persisted_state),
+        ):
+            response = client.post("/api/investigations")
         assert response.status_code == 200
         data = response.json()
         assert data["case_id"] == VALID_CASE_ID

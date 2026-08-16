@@ -93,8 +93,12 @@ class InvestigationRepository:
     async def list_all(
         self,
         session: AsyncSession,
+        *,
+        status: str | None = None,
+        offset: int = 0,
+        limit: int = 20,
     ) -> list[InvestigationCase]:
-        """List all investigation cases, ordered by creation time.
+        """List persisted investigation cases with optional filtering.
 
         Args:
             session: Active async database session.
@@ -102,7 +106,14 @@ class InvestigationRepository:
         Returns:
             A list of all InvestigationCase records.
         """
-        stmt = select(InvestigationCase).order_by(InvestigationCase.created_at)
+        stmt = select(InvestigationCase)
+        if status is not None:
+            stmt = stmt.where(InvestigationCase.status == status)
+        stmt = (
+            stmt.order_by(InvestigationCase.created_at)
+            .offset(offset)
+            .limit(limit)
+        )
         result = await session.execute(stmt)
         return list(result.scalars().all())
 

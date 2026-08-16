@@ -8,13 +8,32 @@ Verifies:
 - Deterministic output (same data on repeated calls)
 """
 
+from unittest.mock import AsyncMock, patch
+
+import pytest
 from fastapi.testclient import TestClient
 
+from app.api.routes import investigations as investigation_routes
 from app.main import app
 from app.schemas.investigation_state import InvestigationState
 
 
 client = TestClient(app)
+
+
+# Round 4 creates persisted cases.  Keep these legacy response-shape tests
+# independent from a live database by mocking the service boundary.
+_PERSISTED_STATE = investigation_routes._build_investigation_state(42)
+
+
+@pytest.fixture(autouse=True)
+def _mock_create_service():
+    with patch.object(
+        investigation_routes._investigation_service,
+        "create_investigation",
+        new=AsyncMock(return_value=_PERSISTED_STATE),
+    ):
+        yield
 
 
 class TestInvestigationsEndpoint:
