@@ -210,7 +210,10 @@ def process_pdf(file_bytes: bytes) -> dict:
                         "extracted_text": None,
                         "summary": None,
                         "processing_status": ProcessingStatus.FAILED,
-                        "error": "OCR produced no usable text from scanned PDF.",
+                        "error": (
+                            "PDF contains no extractable text; "
+                            "OCR produced no usable text from scanned PDF."
+                        ),
                     }
             except Exception as ocr_exc:
                 logger.warning("OCR fallback failed: %s", ocr_exc)
