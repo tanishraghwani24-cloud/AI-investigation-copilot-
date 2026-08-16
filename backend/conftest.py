@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 @pytest.fixture(autouse=True)
 def mock_gemini_boundary(request):
@@ -46,9 +46,9 @@ def mock_gemini_boundary(request):
             from app.schemas.investigation_state import EvidenceComplianceValidation, AgentStatus
             return EvidenceComplianceValidation(
                 status=AgentStatus.COMPLETED,
-                policy_violations=[],
-                regulatory_flags=[],
-                missing_information=["None"]
+                compliance_mappings=[],
+                evidence_gaps=[],
+                validation_summary="Fake compliance validation",
             )
         elif schema_name == "_DecisionOptionsResponse":
             from app.agents.decision_agent import _DecisionOptionsResponse
@@ -64,22 +64,29 @@ def mock_gemini_boundary(request):
                 decision_rationale="why hold"
             )
         elif schema_name == "InvestigationReport":
-            from app.schemas.investigation_state import InvestigationReport, AgentStatus, GraphData
+            from app.schemas.investigation_state import InvestigationReport, AgentStatus
             return InvestigationReport(
                 status=AgentStatus.COMPLETED,
                 executive_summary="Fake executive summary",
-                case_timeline=["Event 1"],
-                evidence_log=["Evidence 1"],
-                graphs=GraphData(
-                    entity_relationship_graph="Fake graph",
-                    reasoning_graph="Fake graph",
-                    decision_comparison_graph="Fake graph",
-                    investigation_timeline=["Fake timeline"]
-                )
+                detailed_narrative="Fake detailed narrative",
             )
             
         raise ValueError(f"Mock does not know how to handle schema: {schema_name}")
 
-    # Patch the generate method on the GeminiClient class
-    with patch("app.services.gemini_client.GeminiClient.generate", new=fake_generate):
+    mock_client = MagicMock()
+    mock_client.generate.side_effect = lambda prompt, response_schema=None: fake_generate(
+        mock_client, prompt, response_schema
+    )
+
+    # Patch agent-local factories before a real Gemini client is constructed.
+    with patch(
+        "app.agents.reasoning_agent.get_gemini_client",
+        return_value=mock_client,
+    ), patch(
+        "app.agents.compliance_agent.get_gemini_client",
+        return_value=mock_client,
+    ), patch(
+        "app.agents.decision_agent.get_gemini_client",
+        return_value=mock_client,
+    ):
         yield
