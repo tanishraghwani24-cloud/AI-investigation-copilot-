@@ -1,8 +1,13 @@
-"""Evidence-backed AML/KYC compliance analysis agent."""
+"""Evidence-backed AML/KYC compliance analysis agent.
+
+Round 5: finalize evidence traceability — every ComplianceMapping either
+cites real evidence or is explicitly labelled as unsupported.
+"""
 
 from __future__ import annotations
 
 import logging
+import re
 
 from app.schemas.investigation_state import (
     AgentStatus,
@@ -15,31 +20,42 @@ from app.services.gemini_client import GeminiClientError, get_gemini_client
 
 logger = logging.getLogger(__name__)
 
+_INSUFFICIENT_EVIDENCE_LABEL = (
+    "Insufficient evidence to confirm or deny this compliance "
+    "concern: the available case materials do not substantiate the finding."
+)
+
 
 def _available_evidence_ids(state: InvestigationState) -> set[str]:
     """Collect only concrete identifiers genuinely available in the state."""
     case_input = state.case_input
-    identifiers = {transaction.transaction_id for transaction in case_input.transactions}
+    identifiers = {
+        transaction.transaction_id
+        for transaction in case_input.transactions
+        if transaction.transaction_id.strip()
+    }
     for document in case_input.supporting_documents:
-        identifiers.add(document.document_id)
-        identifiers.update(reference for reference in document.evidence_references if reference)
-        identifiers.update(reference for reference in document.extracted_transactions if reference)
+        if document.document_id.strip():
+            identifiers.add(document.document_id)
+        identifiers.update(
+            reference for reference in document.evidence_references if reference.strip()
+        )
+        identifiers.update(
+            reference for reference in document.extracted_transactions if reference.strip()
+        )
     for value in (
         case_input.customer_profile.customer_id if case_input.customer_profile else None,
         case_input.merchant_info.merchant_id if case_input.merchant_info else None,
         case_input.beneficiary_info.beneficiary_id if case_input.beneficiary_info else None,
         case_input.device_info.device_id if case_input.device_info else None,
     ):
-        if value:
+        if value and value.strip():
             identifiers.add(value)
     if state.context_intelligence:
-        identifiers.update(anomaly.anomaly_id for anomaly in state.context_intelligence.anomalies)
-        for anomaly in state.context_intelligence.anomalies:
-            identifiers.update(anomaly.related_transactions)
-    if state.investigation_reasoning:
         identifiers.update(
-            hypothesis.hypothesis_id
-            for hypothesis in state.investigation_reasoning.hypotheses
+            anomaly.anomaly_id
+            for anomaly in state.context_intelligence.anomalies
+            if anomaly.anomaly_id.strip()
         )
     return identifiers
 
@@ -68,20 +84,94 @@ def _missing_evidence_gaps(state: InvestigationState) -> list[str]:
     return gaps
 
 
-def _normalise_mappings(mappings: list[ComplianceMapping], available_ids: set[str]) -> list[ComplianceMapping]:
-    """Remove fabricated identifiers and qualify findings without evidence."""
+# ── Round 5: evidence derivation from reasoning hypotheses ───────────
+
+
+def _derive_evidence_from_description(
+    description: str,
+    available_ids: set[str],
+    state: InvestigationState,
+) -> list[str]:
+    """Attempt to derive real evidence IDs for a mapping that lacks direct references.
+
+    Scans the mapping's description text for structured evidence IDs that
+    match ``available_ids``.  Then cross-references reasoning hypotheses:
+    if a hypothesis's ``supporting_evidence`` contains an ID present in
+    ``available_ids`` *and* that ID appears in the mapping description,
+    it is included.
+
+    Returns only IDs that exist in ``available_ids`` — never fabricated.
+    """
+    if not description:
+        return []
+
+    # 1. Match actual state identifiers exactly.  This intentionally avoids
+    # treating a string as evidence merely because it looks like an ID.
+    mentioned_ids = {
+        evidence_id
+        for evidence_id in available_ids
+        if re.search(
+            rf"(?<![A-Za-z0-9_-]){re.escape(evidence_id)}(?![A-Za-z0-9_-])",
+            description,
+        )
+    }
+    derived = set(mentioned_ids)
+
+    # 2. Cross-reference reasoning hypotheses for additional real IDs.
+    if state.investigation_reasoning:
+        for hypothesis in state.investigation_reasoning.hypotheses:
+            # Collect real evidence IDs from hypothesis supporting_evidence.
+            for evidence_item in hypothesis.supporting_evidence:
+                real_ids = {
+                    evidence_id
+                    for evidence_id in available_ids
+                    if re.search(
+                        rf"(?<![A-Za-z0-9_-]){re.escape(evidence_id)}(?![A-Za-z0-9_-])",
+                        evidence_item,
+                    )
+                }
+                if not real_ids:
+                    continue
+                # If any of these real IDs are also mentioned in the mapping
+                # description, they strengthen traceability.
+                for rid in real_ids:
+                    if rid in description:
+                        derived.add(rid)
+
+    return sorted(derived)
+
+
+def _normalise_mappings(
+    mappings: list[ComplianceMapping],
+    available_ids: set[str],
+    state: InvestigationState,
+) -> list[ComplianceMapping]:
+    """Remove fabricated identifiers and qualify findings without evidence.
+
+    Round 5: before labelling a mapping as unsupported, attempts to derive
+    real evidence references from the mapping description and reasoning
+    hypothesis cross-references.
+    """
     normalised: list[ComplianceMapping] = []
     for mapping in mappings:
+        # Step 1: keep only evidence references that exist in the state.
         evidence = [reference for reference in mapping.evidence_references if reference in available_ids]
+
         if evidence:
             normalised.append(mapping.model_copy(update={"evidence_references": evidence}))
             continue
+
+        # Step 2 (Round 5): attempt to derive real evidence from description.
         description = mapping.description or ""
+        derived = _derive_evidence_from_description(description, available_ids, state)
+
+        if derived:
+            normalised.append(mapping.model_copy(update={"evidence_references": derived}))
+            continue
+
+        # Step 3: no real evidence — explicitly label as insufficient.
         if "insufficient evidence" not in description.lower():
-            description = (
-                f"{description} Insufficient evidence to confirm or deny this compliance "
-                "concern: the available case materials do not substantiate the finding."
-            ).strip()
+            description = f"{description} {_INSUFFICIENT_EVIDENCE_LABEL}".strip()
         normalised.append(mapping.model_copy(update={
             "description": description,
             "is_violated": False,
@@ -133,7 +223,8 @@ def compliance_agent(state: InvestigationState) -> dict:
     except GeminiClientError:
         logger.exception("Gemini call failed in compliance_agent")
         raise
-    mappings = _normalise_mappings(response.compliance_mappings, _available_evidence_ids(state))
+    available_ids = _available_evidence_ids(state)
+    mappings = _normalise_mappings(response.compliance_mappings, available_ids, state)
     gaps = list(dict.fromkeys([*response.evidence_gaps, *_missing_evidence_gaps(state)]))
     summary = response.validation_summary or (
         f"Compliance review produced {len(mappings)} evidence-constrained finding(s) and identified {len(gaps)} evidence gap(s)."
