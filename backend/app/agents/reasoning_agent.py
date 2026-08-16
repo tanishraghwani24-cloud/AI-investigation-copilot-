@@ -7,6 +7,12 @@ the existing ``GeminiClient``, and produces exactly ONE validated
 
 Round 2: Single hypothesis generation.  Multiple / competing
 hypotheses belong to a later round.
+
+Round 5: When ``evidence_compliance_validation`` is already present in the
+state, the agent cross-references compliance findings with each hypothesis.
+If a compliance finding directly contradicts a hypothesis (shared evidence
+reference + flagged concern), confidence is reduced and the contradiction
+is explicitly acknowledged in the hypothesis description.
 """
 
 import logging
@@ -17,9 +23,11 @@ from pydantic import BaseModel, ValidationError
 
 from app.schemas.investigation_state import (
     AgentStatus,
+    ComplianceMapping,
     Hypothesis,
     InvestigationReasoning,
     InvestigationState,
+    SeverityLevel,
 )
 from app.services.gemini_client import GeminiClientError, get_gemini_client
 
@@ -158,6 +166,122 @@ def _normalise_hypotheses(
         }))
     return normalised
 
+
+# ── Round 5: Compliance alignment ────────────────────────────────────
+
+# Compliance severity levels considered significant enough to constitute a
+# contradiction when they reference evidence shared with a hypothesis.
+_CONTRADICTION_SEVERITIES = {SeverityLevel.MEDIUM, SeverityLevel.HIGH}
+
+# Multiplier applied to hypothesis confidence when a compliance contradiction
+# is detected.  0.8 means a 20 % reduction.
+_COMPLIANCE_CONFIDENCE_PENALTY = 0.8
+
+
+def _extract_evidence_ids(evidence_items: list[str]) -> set[str]:
+    """Extract all structured evidence IDs from a list of evidence strings."""
+    ids: set[str] = set()
+    for item in evidence_items:
+        ids.update(_EVIDENCE_ID_PATTERN.findall(item.upper()))
+    return ids
+
+
+def _find_contradicting_mappings(
+    hypothesis: Hypothesis,
+    compliance_mappings: list[ComplianceMapping],
+) -> list[ComplianceMapping]:
+    """Return compliance mappings that directly contradict *hypothesis*.
+
+    A mapping is considered contradictory when:
+    1. At least one of its ``evidence_references`` matches an evidence ID
+       referenced in the hypothesis's ``supporting_evidence``.
+    2. The mapping is flagged — either ``is_violated`` is True or its
+       ``severity`` is MEDIUM or higher.
+
+    This ensures that only meaningfully related and flagged compliance
+    findings are treated as contradictions.
+    """
+    hypothesis_ids = _extract_evidence_ids(hypothesis.supporting_evidence)
+    if not hypothesis_ids:
+        return []
+
+    contradicting: list[ComplianceMapping] = []
+    for mapping in compliance_mappings:
+        # Only consider flagged findings
+        is_flagged = mapping.is_violated or mapping.severity in _CONTRADICTION_SEVERITIES
+        if not is_flagged:
+            continue
+
+        mapping_ids = {ref.upper() for ref in mapping.evidence_references}
+        if hypothesis_ids & mapping_ids:
+            contradicting.append(mapping)
+
+    return contradicting
+
+
+def _apply_compliance_alignment(
+    hypotheses: list[Hypothesis],
+    state: InvestigationState,
+) -> list[Hypothesis]:
+    """Adjust hypotheses that are directly contradicted by compliance findings.
+
+    When ``evidence_compliance_validation`` is present in *state* and contains
+    compliance mappings, each hypothesis is checked for overlapping evidence
+    references.  If a flagged compliance finding shares evidence with a
+    hypothesis, the hypothesis's confidence is reduced and its description is
+    updated to explicitly acknowledge the compliance concern.
+
+    When compliance data is absent, None, or empty, hypotheses are returned
+    unchanged — preserving full backward compatibility.
+    """
+    compliance = state.evidence_compliance_validation
+    if compliance is None:
+        return hypotheses
+    if not compliance.compliance_mappings:
+        return hypotheses
+
+    aligned: list[Hypothesis] = []
+    for hypothesis in hypotheses:
+        contradictions = _find_contradicting_mappings(
+            hypothesis, compliance.compliance_mappings,
+        )
+        if not contradictions:
+            aligned.append(hypothesis)
+            continue
+
+        # Build acknowledgment language citing each contradicting regulation.
+        concerns = []
+        for mapping in contradictions:
+            label = mapping.regulation_name or mapping.regulation_id
+            detail = mapping.description or "compliance concern identified"
+            concerns.append(f"{label}: {detail}")
+
+        acknowledgment = (
+            " [Compliance alignment] Confidence reduced — compliance "
+            "findings raise concern(s) related to the same evidence: "
+            + "; ".join(concerns)
+            + "."
+        )
+
+        adjusted_confidence = round(
+            max(0.0, min(1.0, hypothesis.confidence * _COMPLIANCE_CONFIDENCE_PENALTY)),
+            4,
+        )
+
+        # Add compliance concern references to contradicting_evidence so
+        # downstream consumers can see the provenance.
+        extra_contradicting = [
+            f"Compliance finding ({m.regulation_id}): {m.description or m.regulation_name}"
+            for m in contradictions
+        ]
+
+        aligned.append(hypothesis.model_copy(update={
+            "description": hypothesis.description + acknowledgment,
+            "confidence": adjusted_confidence,
+            "contradicting_evidence": hypothesis.contradicting_evidence + extra_contradicting,
+        }))
+
+    return aligned
 
 def _is_malformed_structured_output(error: Exception) -> bool:
     """Identify parsing or Pydantic validation failures eligible for one retry."""
@@ -300,6 +424,8 @@ unsupported evidence or certainty when evidence is unavailable.
                 ),
             }
     hypotheses = _normalise_hypotheses(response.hypotheses, state)
+    # Round 5: cross-reference existing compliance findings (if available).
+    hypotheses = _apply_compliance_alignment(hypotheses, state)
 
     reasoning = InvestigationReasoning(
         status=AgentStatus.COMPLETED,
