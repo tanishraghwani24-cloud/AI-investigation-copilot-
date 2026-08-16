@@ -176,6 +176,9 @@ async def run_investigation_with_persistence(
                 await inv_repo.update_state(
                     session, state.case_id, accumulated_state,
                 )
+                # Commit each completed node so an interrupted run leaves
+                # the latest completed state durable and recoverable.
+                await session.commit()
     except Exception as exc:
         # Determine which node failed from the exception context.
         # LangGraph wraps node exceptions; we inspect the __context__
@@ -212,8 +215,6 @@ async def run_investigation_with_persistence(
         await inv_repo.update_state(
             session, state.case_id, accumulated_state,
         )
-
-    await session.commit()
 
     return InvestigationState(**accumulated_state)
 

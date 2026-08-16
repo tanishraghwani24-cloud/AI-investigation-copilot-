@@ -429,3 +429,21 @@ async def test_current_stage_reflects_final_stage(db_session, mock_gemini):
     record = result.scalar_one()
 
     assert record.state_json["current_stage"] == "DONE"
+
+
+@pytest.mark.asyncio
+async def test_state_committed_after_each_graph_node(db_session, mock_gemini):
+    """Each of the five completed nodes is committed independently."""
+    state = _build_test_state()
+    commit_stages = []
+    original_commit = db_session.commit
+
+    async def tracked_commit():
+        commit_stages.append(True)
+        await original_commit()
+
+    with patch.object(db_session, "commit", new=tracked_commit):
+        result = await run_investigation_with_persistence(state, db_session)
+
+    assert result.current_stage == CurrentStage.DONE
+    assert len(commit_stages) == 5
