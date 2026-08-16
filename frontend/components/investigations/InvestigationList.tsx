@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { listInvestigations } from "@/services/investigationService";
 import { StatusBadge } from "@/components/investigations/StatusBadge";
@@ -12,17 +12,43 @@ export function InvestigationList() {
     [],
   );
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadInvestigations = useCallback(() => {
+    setLoading(true);
+    setError(null);
     listInvestigations()
       .then(setInvestigations)
+      .catch((reason: unknown) => {
+        setError(reason instanceof Error ? reason.message : "Unable to load investigations.");
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    void loadInvestigations();
+  }, [loadInvestigations]);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-blue-600" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 px-6 py-8 text-center">
+        <h1 className="text-lg font-semibold text-red-800">Unable to load investigations</h1>
+        <p className="mt-2 text-sm text-red-700">{error}</p>
+        <button
+          type="button"
+          onClick={loadInvestigations}
+          className="mt-4 rounded-md bg-red-700 px-3 py-2 text-sm font-medium text-white hover:bg-red-800"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -61,7 +87,13 @@ export function InvestigationList() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {investigations.map((inv) => (
+            {investigations.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-6 py-10 text-center text-sm text-gray-500">
+                  No investigations found.
+                </td>
+              </tr>
+            ) : investigations.map((inv) => (
               <Link
                 key={inv.case_id}
                 href={`/investigations/${inv.case_id}`}
