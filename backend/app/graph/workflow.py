@@ -165,7 +165,7 @@ async def run_investigation_with_persistence(
     accumulated_state = state_dict.copy()
 
     try:
-        for chunk in _investigation_graph.stream(
+        async for chunk in _investigation_graph.astream(
             state_dict, stream_mode="updates",
         ):
             for node_name, node_output in chunk.items():
