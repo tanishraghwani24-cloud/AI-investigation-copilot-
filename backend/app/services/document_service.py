@@ -25,6 +25,9 @@ logger = logging.getLogger(__name__)
 # Maximum characters for the deterministic summary/preview
 _SUMMARY_MAX_CHARS = 500
 
+# Maximum accepted upload size before PDF parsing or OCR is attempted.
+_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
+
 # Minimum character threshold for "usable" text
 _MIN_USABLE_TEXT_LENGTH = 10
 
@@ -37,6 +40,28 @@ _OCR_PROMPT = (
     "Return only the raw text content, preserving the reading order. "
     "Do not add any commentary, formatting instructions, or markdown."
 )
+
+
+def _failed_result(reason: str) -> dict:
+    """Build a consistent failed result with its reason preserved."""
+    return {
+        "extracted_text": None,
+        "summary": None,
+        "processing_status": ProcessingStatus.FAILED,
+        "error": reason,
+    }
+
+
+def _oversized_result(file_bytes: bytes) -> dict | None:
+    """Return a failure result when bytes exceed the processing limit."""
+    if len(file_bytes) <= _MAX_FILE_SIZE_BYTES:
+        return None
+    size_mb = len(file_bytes) / (1024 * 1024)
+    limit_mb = _MAX_FILE_SIZE_BYTES / (1024 * 1024)
+    return _failed_result(
+        f"Document exceeds the maximum allowed size of {limit_mb:g} MiB "
+        f"(received {size_mb:.2f} MiB)."
+    )
 
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
@@ -195,6 +220,10 @@ def process_pdf(file_bytes: bytes) -> dict:
             - ``error``: Error message string if processing failed,
               otherwise None.
     """
+    oversized = _oversized_result(file_bytes)
+    if oversized is not None:
+        return oversized
+
     try:
         extracted_text = extract_text_from_pdf(file_bytes)
 
@@ -206,23 +235,15 @@ def process_pdf(file_bytes: bytes) -> dict:
                 if ocr_text and ocr_text.strip():
                     extracted_text = ocr_text
                 else:
-                    return {
-                        "extracted_text": None,
-                        "summary": None,
-                        "processing_status": ProcessingStatus.FAILED,
-                        "error": (
-                            "PDF contains no extractable text; "
-                            "OCR produced no usable text from scanned PDF."
-                        ),
-                    }
+                    return _failed_result(
+                        "PDF contains no extractable text; "
+                        "OCR produced no usable text from scanned PDF."
+                    )
             except Exception as ocr_exc:
                 logger.warning("OCR fallback failed: %s", ocr_exc)
-                return {
-                    "extracted_text": None,
-                    "summary": None,
-                    "processing_status": ProcessingStatus.FAILED,
-                    "error": f"PDF contains no extractable text and OCR failed: {ocr_exc}",
-                }
+                return _failed_result(
+                    f"PDF contains no extractable text and OCR failed: {ocr_exc}"
+                )
 
         summary = generate_summary(extracted_text)
 
@@ -235,20 +256,10 @@ def process_pdf(file_bytes: bytes) -> dict:
 
     except PdfReadError as exc:
         logger.warning("PDF extraction failed (corrupt/unreadable): %s", exc)
-        return {
-            "extracted_text": None,
-            "summary": None,
-            "processing_status": ProcessingStatus.FAILED,
-            "error": f"PDF is corrupt or unreadable: {exc}",
-        }
+        return _failed_result(f"PDF is corrupt or unreadable: {exc}")
     except Exception as exc:
         logger.exception("Unexpected error during PDF extraction: %s", exc)
-        return {
-            "extracted_text": None,
-            "summary": None,
-            "processing_status": ProcessingStatus.FAILED,
-            "error": f"Unexpected extraction error: {exc}",
-        }
+        return _failed_result(f"Unexpected extraction error: {exc}")
 
 
 def process_image(file_bytes: bytes, file_name: str) -> dict:
@@ -263,18 +274,17 @@ def process_image(file_bytes: bytes, file_name: str) -> dict:
     Returns:
         A dict with the same structure as ``process_pdf``.
     """
+    oversized = _oversized_result(file_bytes)
+    if oversized is not None:
+        return oversized
+
     mime_type = _get_mime_type(file_name)
 
     try:
         ocr_text = _ocr_via_gemini(file_bytes, mime_type)
 
         if not ocr_text or not ocr_text.strip():
-            return {
-                "extracted_text": None,
-                "summary": None,
-                "processing_status": ProcessingStatus.FAILED,
-                "error": "OCR produced no usable text from image.",
-            }
+            return _failed_result("OCR produced no usable text from image.")
 
         summary = generate_summary(ocr_text)
 
@@ -287,12 +297,7 @@ def process_image(file_bytes: bytes, file_name: str) -> dict:
 
     except Exception as exc:
         logger.exception("Image OCR failed: %s", exc)
-        return {
-            "extracted_text": None,
-            "summary": None,
-            "processing_status": ProcessingStatus.FAILED,
-            "error": f"Image OCR failed: {exc}",
-        }
+        return _failed_result(f"Image OCR failed: {exc}")
 
 
 def process_document(file_bytes: bytes, file_name: str) -> dict:
@@ -319,6 +324,14 @@ def process_document(file_bytes: bytes, file_name: str) -> dict:
             - ``extracted_entities``
             - ``extracted_transactions``
     """
+    # Reject oversized input before dispatching to parsing or OCR.
+    oversized = _oversized_result(file_bytes)
+    if oversized is not None:
+        oversized["extracted_entities"] = []
+        oversized["extracted_transactions"] = []
+        oversized["summary"] = oversized["error"]
+        return oversized
+
     # Step 1: Text extraction
     if _is_image_file(file_name):
         result = process_image(file_bytes, file_name)
@@ -343,5 +356,14 @@ def process_document(file_bytes: bytes, file_name: str) -> dict:
     else:
         result["extracted_entities"] = []
         result["extracted_transactions"] = []
+
+    # The upload path persists ``summary`` and the frozen document model has
+    # no dedicated error column. Preserve failed processing reasons there.
+    if (
+        result["processing_status"] == ProcessingStatus.FAILED
+        and not result.get("summary")
+        and result.get("error")
+    ):
+        result["summary"] = result["error"]
 
     return result
