@@ -120,12 +120,17 @@ export default async function InvestigationDetailPage({ params }: PageProps) {
                   </tbody>
                 </table>
               </div>
-            ) : <p className="text-sm italic text-gray-400">No transactions attached.</p>}
+            ) : (
+              <div className="flex flex-col items-center justify-center py-8 text-center rounded-lg border border-gray-100 bg-gray-50/50">
+                <p className="text-sm font-medium text-gray-900">No transactions</p>
+                <p className="text-xs text-gray-500 mt-1">No transactions are attached to this investigation.</p>
+              </div>
+            )}
           </div>
           {caseInput.customer_profile && (
             <div>
               <h4 className="mb-2 text-sm font-medium text-gray-700">Customer Profile</h4>
-              <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
                 <Detail label="Name" value={caseInput.customer_profile.name} /><Detail label="ID" value={caseInput.customer_profile.customer_id} /><Detail label="Risk Rating" value={caseInput.customer_profile.risk_rating} /><Detail label="Email" value={caseInput.customer_profile.email} /><Detail label="Occupation" value={caseInput.customer_profile.occupation} /><Detail label="Nationality" value={caseInput.customer_profile.nationality} />
               </div>
             </div>

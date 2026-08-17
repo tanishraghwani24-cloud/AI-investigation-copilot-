@@ -1,5 +1,6 @@
 import { Brain } from "lucide-react";
 import { StatusBadge } from "@/components/investigations/StatusBadge";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { AgentStatus } from "@/types";
 import type { InvestigationReasoning } from "@/types";
 
@@ -70,7 +71,7 @@ export function ReasoningPanel({ data }: ReasoningPanelProps) {
             )}
           </div>
         ) : (
-          <p className="text-sm text-gray-400 italic">No hypotheses available</p>
+          <EmptyState icon={Brain} title="No reasoning available" description="The investigation reasoning and hypotheses have not been generated yet." />
         )}
       </div>
     </div>

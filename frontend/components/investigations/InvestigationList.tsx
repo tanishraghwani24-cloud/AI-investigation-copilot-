@@ -26,13 +26,41 @@ export function InvestigationList() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadInvestigations();
   }, [loadInvestigations]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-blue-600" />
+      <div className="animate-pulse">
+        <div className="mb-6">
+          <div className="h-8 w-48 rounded bg-gray-200" />
+          <div className="mt-2 h-4 w-32 rounded bg-gray-100" />
+        </div>
+        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-gray-200 bg-gray-50/80">
+                <th className="px-6 py-4"><div className="h-4 w-24 rounded bg-gray-200" /></th>
+                <th className="px-6 py-4"><div className="h-4 w-24 rounded bg-gray-200" /></th>
+                <th className="px-6 py-4"><div className="h-4 w-16 rounded bg-gray-200" /></th>
+                <th className="px-6 py-4"><div className="h-4 w-16 rounded bg-gray-200" /></th>
+                <th className="px-6 py-4"><div className="h-4 w-20 rounded bg-gray-200" /></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <tr key={i}>
+                  <td className="px-6 py-4"><div className="h-4 w-20 rounded bg-gray-100" /></td>
+                  <td className="px-6 py-4"><div className="h-4 w-32 rounded bg-gray-100" /></td>
+                  <td className="px-6 py-4"><div className="h-6 w-24 rounded-full bg-gray-100" /></td>
+                  <td className="px-6 py-4"><div className="h-6 w-16 rounded-full bg-gray-100" /></td>
+                  <td className="px-6 py-4"><div className="h-4 w-24 rounded bg-gray-100" /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     );
   }
@@ -67,7 +95,7 @@ export function InvestigationList() {
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50/80">

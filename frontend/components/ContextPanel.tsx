@@ -1,5 +1,6 @@
 import { Search } from "lucide-react";
 import { StatusBadge } from "@/components/investigations/StatusBadge";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { AgentStatus } from "@/types";
 import type { ContextIntelligence } from "@/types";
 
@@ -51,7 +52,7 @@ export function ContextPanel({ data }: ContextPanelProps) {
             )}
           </div>
         ) : (
-          <p className="text-sm text-gray-400 italic">No context data available</p>
+          <EmptyState icon={Search} title="No context available" description="Context intelligence data has not been generated for this investigation." />
         )}
       </div>
     </div>

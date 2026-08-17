@@ -1,5 +1,6 @@
 import { ShieldCheck } from "lucide-react";
 import { StatusBadge } from "@/components/investigations/StatusBadge";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { AgentStatus } from "@/types";
 import type { EvidenceComplianceValidation } from "@/types";
 
@@ -69,7 +70,7 @@ export function CompliancePanel({ data }: CompliancePanelProps) {
             )}
           </div>
         ) : (
-          <p className="text-sm text-gray-400 italic">No compliance findings available</p>
+          <EmptyState icon={ShieldCheck} title="No compliance findings" description="Compliance validation has not been performed for this investigation." />
         )}
       </div>
     </div>

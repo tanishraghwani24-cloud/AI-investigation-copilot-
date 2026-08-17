@@ -1,5 +1,6 @@
 import { Scale } from "lucide-react";
 import { StatusBadge } from "@/components/investigations/StatusBadge";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { AgentStatus } from "@/types";
 import type { DecisionOption, DecisionOptimization } from "@/types";
 
@@ -78,7 +79,7 @@ export function DecisionPanel({ data }: DecisionPanelProps) {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-gray-400 italic">Decision options are not available yet.</p>
+          <EmptyState icon={Scale} title="No decision options" description="Decision optimization has not been completed yet." />
         )}
       </div>
     </section>

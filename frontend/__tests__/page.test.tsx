@@ -137,8 +137,8 @@ describe('InvestigationDetailPage', () => {
     const Component = await InvestigationDetailPage({ params });
     render(Component);
 
-    expect(screen.getByText('No context data available')).toBeInTheDocument();
-    expect(screen.getByText('No hypotheses available')).toBeInTheDocument();
-    expect(screen.getByText('No compliance findings available')).toBeInTheDocument();
+    expect(screen.getByText('No context available')).toBeInTheDocument();
+    expect(screen.getByText('No reasoning available')).toBeInTheDocument();
+    expect(screen.getByText('No compliance findings')).toBeInTheDocument();
   });
 });

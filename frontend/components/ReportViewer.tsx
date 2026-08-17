@@ -1,5 +1,6 @@
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, FileWarning } from "lucide-react";
 import { StatusBadge } from "@/components/investigations/StatusBadge";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { AgentStatus } from "@/types";
 import type { InvestigationReport } from "@/types";
 
@@ -36,9 +37,11 @@ export function ReportViewer({ report }: ReportViewerProps) {
             <p className="text-sm text-gray-500">The backend has not supplied a downloadable report reference.</p>
           </>
         ) : (
-          <p className="text-sm text-gray-400 italic">
-            {status === AgentStatus.FAILED ? "The report could not be generated." : "The investigation report is not available yet."}
-          </p>
+          <EmptyState 
+            icon={status === AgentStatus.FAILED ? FileWarning : ClipboardList} 
+            title={status === AgentStatus.FAILED ? "Report generation failed" : "No report available"} 
+            description={status === AgentStatus.FAILED ? "The report could not be generated due to an error." : "The investigation report has not been generated yet."} 
+          />
         )}
       </div>
     </section>
