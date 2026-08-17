@@ -144,8 +144,8 @@ class TestUnknownInvestigation:
         ):
             response = client.get("/api/investigations/CASE-UNKNOWN-XYZ")
         data = response.json()
-        assert "detail" in data
-        assert "CASE-UNKNOWN-XYZ" in data["detail"]
+        assert data["error"]["code"] == "NOT_FOUND"
+        assert "CASE-UNKNOWN-XYZ" in data["error"]["message"]
 
 
 # ── TEST 9: Persisted state round trip ───────────────────────────────

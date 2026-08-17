@@ -5,8 +5,9 @@ Provides the persisted investigation REST API.
 
 from datetime import datetime, timezone
 import logging
+from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +26,16 @@ from app.services.investigation_service import InvestigationService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+CaseIdPath = Annotated[
+    str,
+    Path(
+        min_length=1,
+        max_length=80,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]*$",
+        description="Investigation case identifier.",
+    ),
+]
 
 
 class InvestigationRunResponse(BaseModel):
@@ -153,7 +164,7 @@ async def list_investigations(
 
 @router.get("/investigations/{case_id}", response_model=InvestigationState)
 async def get_investigation(
-    case_id: str,
+    case_id: CaseIdPath,
     db: AsyncSession = Depends(get_db_session),
 ) -> InvestigationState:
     """Retrieve the current persisted investigation state.
@@ -218,7 +229,7 @@ async def _run_investigation_background(case_id: str) -> None:
     status_code=202,
 )
 async def run_investigation(
-    case_id: str,
+    case_id: CaseIdPath,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db_session),
 ) -> InvestigationRunResponse:

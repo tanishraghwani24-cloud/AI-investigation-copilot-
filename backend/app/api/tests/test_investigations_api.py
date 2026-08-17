@@ -138,6 +138,7 @@ def test_create_investigation_rejects_invalid_scenario(api_client: TestClient) -
     response = api_client.post("/api/investigations?scenario=invalid")
 
     assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
 def test_get_returns_the_persisted_investigation_not_hardcoded(
@@ -173,7 +174,8 @@ def test_get_nonexistent_investigation_returns_404(api_client: TestClient) -> No
         response = api_client.get("/api/investigations/CASE-MISSING")
 
     assert response.status_code == 404
-    assert "CASE-MISSING" in response.json()["detail"]
+    assert response.json()["error"]["code"] == "NOT_FOUND"
+    assert "CASE-MISSING" in response.json()["error"]["message"]
 
 
 def test_list_investigations_uses_persisted_service_results(
@@ -189,6 +191,7 @@ def test_list_investigations_uses_persisted_service_results(
 
     assert response.status_code == 200
     assert [item["case_id"] for item in response.json()] == ["CASE-ONE", "CASE-TWO"]
+    assert list_cases.await_args is not None
     assert list_cases.await_args.kwargs == {"status": None, "offset": 0, "limit": 20}
 
 
@@ -202,6 +205,7 @@ def test_list_supports_pagination(api_client: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.json()[0]["case_id"] == "CASE-PAGE-3"
+    assert list_cases.await_args is not None
     assert list_cases.await_args.kwargs == {"status": None, "offset": 2, "limit": 1}
 
 
@@ -214,6 +218,7 @@ def test_list_supports_status_filtering(api_client: TestClient) -> None:
         response = api_client.get("/api/investigations?status=DONE")
 
     assert response.status_code == 200
+    assert list_cases.await_args is not None
     assert list_cases.await_args.kwargs == {
         "status": CurrentStage.DONE,
         "offset": 0,
@@ -252,4 +257,5 @@ def test_run_nonexistent_investigation_returns_404(api_client: TestClient) -> No
         response = api_client.post("/api/investigations/CASE-MISSING/run")
 
     assert response.status_code == 404
-    assert "CASE-MISSING" in response.json()["detail"]
+    assert response.json()["error"]["code"] == "NOT_FOUND"
+    assert "CASE-MISSING" in response.json()["error"]["message"]

@@ -16,8 +16,9 @@ import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path as ApiPath, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.repository import DocumentRepository
@@ -29,6 +30,25 @@ from app.schemas.investigation_state import (
 from app.services.document_service import process_document
 
 router = APIRouter()
+
+CaseIdPath = Annotated[
+    str,
+    ApiPath(
+        min_length=1,
+        max_length=80,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]*$",
+        description="Investigation case identifier.",
+    ),
+]
+DocumentTypeForm = Annotated[
+    str,
+    Form(
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9_-]+$",
+        description="Document type label, for example INVOICE or BANK_STATEMENT.",
+    ),
+]
 
 # ── Known case IDs for Round 1 validation ────────────────────────────
 # The existing investigations endpoint returns a hardcoded mock with
@@ -75,9 +95,9 @@ def _is_processable(filename: str | None) -> bool:
     response_model=SupportingDocument,
 )
 async def upload_document(
-    case_id: str,
+    case_id: CaseIdPath,
     file: UploadFile = File(...),
-    document_type: str = Form(default="OTHER"),
+    document_type: DocumentTypeForm = "OTHER",
     db: AsyncSession = Depends(get_db_session),
 ) -> SupportingDocument:
     """Upload a supporting document for an investigation case.
@@ -177,7 +197,7 @@ async def upload_document(
     response_model=list[SupportingDocument],
 )
 async def list_documents(
-    case_id: str,
+    case_id: CaseIdPath,
     db: AsyncSession = Depends(get_db_session),
 ) -> list[SupportingDocument]:
     """List all documents for an investigation case.
