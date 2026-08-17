@@ -302,6 +302,8 @@ def _get_hypotheses(client: object, prompt: str) -> HypothesesResponse:
 # ── Prompt construction ──────────────────────────────────────────────
 
 
+from app.prompts.reasoning_prompts import build_reasoning_prompt
+
 def _build_prompt(state: InvestigationState) -> str:
     """Build a Gemini prompt from the investigation state.
 
@@ -319,49 +321,7 @@ def _build_prompt(state: InvestigationState) -> str:
     else:
         context_json = "{}"
 
-    prompt = f"""\
-You are a senior financial crime investigator.  Analyse the case data
-and context intelligence below, then generate at least TWO genuinely competing
-investigation hypotheses.
-
-=== CASE DATA ===
-{case_json}
-
-=== CONTEXT INTELLIGENCE ===
-{context_json}
-
-=== INSTRUCTIONS ===
-Respond with a single JSON object (no markdown fences, no extra text)
-that conforms to the following schema:
-
-{{
-  "hypotheses": [
-    {{
-      "hypothesis_id": "<string – unique identifier, e.g. HYP-001>",
-      "title": "<string – short hypothesis label>",
-      "description": "<string – detailed explanation of the hypothesis>",
-      "confidence": <float between 0.0 and 1.0>,
-      "supporting_evidence": ["<string>", ...],
-      "contradicting_evidence": ["<string>", ...]
-    }},
-    ...
-  ]
-}}
-
-Rules:
-- The hypotheses MUST be specific to the case data and context intelligence provided above.
-- You MUST produce at least TWO hypotheses that represent materially different explanations.
-- supporting_evidence MUST reference real data points from the case.
-- contradicting_evidence MUST list plausible counter-arguments based on the case data.
-- Do not invent facts, transactions, documents, names, amounts, or any external facts.
-- Distinguish evidence from assumptions and explicitly acknowledge missing evidence if applicable.
-- confidence MUST be between 0.0 and 1.0 inclusive, based on evidence strength.
-- If documents or context are unavailable, leave evidence lists empty unless a
-  case-data reference exists, use conservative confidence, and state that the
-  hypothesis is only an investigative possibility.
-- Return ONLY the raw JSON object.  No markdown, no commentary.
-"""
-    return prompt
+    return build_reasoning_prompt(case_json, context_json)
 
 
 # ── Public API ────────────────────────────────────────────────────────
@@ -395,13 +355,8 @@ def reasoning_agent(state: InvestigationState) -> dict:
             raise
 
         logger.warning("Malformed Gemini reasoning response; retrying once")
-        retry_prompt = prompt + """
-
-Your previous response could not be validated. Return only the exact JSON
-object matching the requested HypothesesResponse schema. Every hypothesis
-must include all required fields with correctly typed values. Do not add
-unsupported evidence or certainty when evidence is unavailable.
-"""
+        from app.prompts.reasoning_prompts import build_reasoning_retry_prompt
+        retry_prompt = build_reasoning_retry_prompt(prompt)
         try:
             response = _get_hypotheses(client, retry_prompt)
         except Exception as retry_exc:
