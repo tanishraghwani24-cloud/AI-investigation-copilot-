@@ -181,35 +181,21 @@ def _normalise_mappings(
     return normalised
 
 
+from app.prompts.compliance_prompts import build_compliance_prompt
+
 def _build_prompt(state: InvestigationState) -> str:
     """Build a prompt that exposes all permitted evidence identifiers."""
+    case_json = state.case_input.model_dump_json(indent=2)
     context_json = state.context_intelligence.model_dump_json(indent=2) if state.context_intelligence else "{}"
     reasoning_json = state.investigation_reasoning.model_dump_json(indent=2) if state.investigation_reasoning else "{}"
-    return f"""\
-You are an AML/KYC investigation assistant. Analyse only the supplied materials.
-Do not claim a regulatory breach, sanctions hit, KYC failure, or fact that the
-case materials do not establish.
+    valid_ids = sorted(_available_evidence_ids(state))
 
-=== CASE INPUT ===
-{state.case_input.model_dump_json(indent=2)}
-=== CONTEXT INTELLIGENCE ===
-{context_json}
-=== INVESTIGATION REASONING ===
-{reasoning_json}
-=== VALID EVIDENCE IDENTIFIERS ===
-{sorted(_available_evidence_ids(state))}
-
-Return only a JSON object with compliance_mappings, evidence_gaps, and
-validation_summary. A compliance_mappings item has regulation_id,
-regulation_name, description, is_violated, severity (LOW, MEDIUM, or HIGH),
-and evidence_references. Assess suspicious activity, patterns, transaction
-size, jurisdiction, beneficiary, and KYC concerns only when the case supports
-them. Every evidence_references value must be one of VALID EVIDENCE IDENTIFIERS.
-If a concern cannot be confirmed, explicitly state that evidence is insufficient,
-use no evidence references, and do not call it a violation. Identify relevant
-missing identity, source-of-funds, transaction, or beneficial-owner evidence,
-but do not say supplied evidence is missing. Never invent identifiers.
-"""
+    return build_compliance_prompt(
+        case_json=case_json,
+        context_json=context_json,
+        reasoning_json=reasoning_json,
+        valid_evidence_ids=valid_ids,
+    )
 
 
 def compliance_agent(state: InvestigationState) -> dict:
