@@ -223,11 +223,11 @@ def _make_unrelated_compliance_finding() -> EvidenceComplianceValidation:
 
 
 def _patch_gemini(return_value=None):
-    """Return a context-manager that patches get_gemini_client."""
+    """Return a context-manager that patches the reasoning client factory."""
     mock_client = MagicMock()
     mock_client.generate.return_value = return_value or _make_hypotheses_response()
     return patch(
-        "app.agents.reasoning_agent.get_gemini_client",
+        "app.agents.reasoning_agent.get_reasoning_client",
         return_value=mock_client,
     )
 

@@ -203,7 +203,7 @@ async def db_session():
 
 @pytest.fixture
 def mock_gemini():
-    """Patch get_gemini_client so Gemini-backed agents stay offline."""
+    """Patch reasoning and decision client factories so tests stay offline."""
     mock_decision_options = _DecisionOptionsResponse(
         options=[
             DecisionOption(
@@ -268,7 +268,7 @@ def mock_gemini():
     mock_client.generate.side_effect = _side_effect
 
     with patch(
-        "app.agents.reasoning_agent.get_gemini_client",
+        "app.agents.reasoning_agent.get_reasoning_client",
         return_value=mock_client,
     ), patch(
         "app.agents.decision_agent.get_gemini_client",

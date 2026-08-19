@@ -7,8 +7,8 @@ def mock_gemini_boundary(request):
     
     This fulfills the requirement: 'Offline tests must mock the Gemini boundary.'
     """
-    # Do not mock if testing the Gemini client itself!
-    if "test_gemini_client" in str(request.node.fspath):
+    # Do not mock if testing the Gemini client itself or running grounding tests!
+    if "test_gemini_client" in str(request.node.fspath) or "grounding" in str(request.node.fspath):
         yield
         return
         
@@ -80,7 +80,7 @@ def mock_gemini_boundary(request):
 
     # Patch agent-local factories before a real Gemini client is constructed.
     with patch(
-        "app.agents.reasoning_agent.get_gemini_client",
+        "app.agents.reasoning_agent.get_reasoning_client",
         return_value=mock_client,
     ), patch(
         "app.agents.compliance_agent.get_gemini_client",

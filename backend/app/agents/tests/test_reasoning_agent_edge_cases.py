@@ -48,7 +48,7 @@ def _hypotheses(*, supporting: list[str] | None = None) -> HypothesesResponse:
 def _run_with_response(state: InvestigationState, response: object):
     client = MagicMock()
     client.generate.return_value = response
-    with patch("app.agents.reasoning_agent.get_gemini_client", return_value=client):
+    with patch("app.agents.reasoning_agent.get_reasoning_client", return_value=client):
         return reasoning_agent(state), client
 
 
@@ -98,7 +98,7 @@ def test_malformed_first_response_retries_once_and_accepts_valid_response() -> N
     malformed = {"hypotheses": [{"hypothesis_id": "HYP-BAD"}]}
     client = MagicMock()
     client.generate.side_effect = [malformed, _hypotheses()]
-    with patch("app.agents.reasoning_agent.get_gemini_client", return_value=client):
+    with patch("app.agents.reasoning_agent.get_reasoning_client", return_value=client):
         result = reasoning_agent(_state())
 
     assert result["investigation_reasoning"].status == AgentStatus.COMPLETED
@@ -109,7 +109,7 @@ def test_malformed_first_response_retries_once_and_accepts_valid_response() -> N
 def test_malformed_both_responses_fails_safely() -> None:
     client = MagicMock()
     client.generate.side_effect = ["not valid structured output", {"hypotheses": [{}]}]
-    with patch("app.agents.reasoning_agent.get_gemini_client", return_value=client):
+    with patch("app.agents.reasoning_agent.get_reasoning_client", return_value=client):
         result = reasoning_agent(_state())
 
     reasoning = result["investigation_reasoning"]

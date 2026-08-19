@@ -9,6 +9,7 @@ Uses the same mock DB session pattern established in
 test_document_upload.py to avoid requiring live Postgres.
 """
 
+import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
@@ -34,8 +35,14 @@ async def _mock_get_db_session():
     yield MagicMock()
 
 
-# Override the DB session dependency globally for these tests
-app.dependency_overrides[get_db_session] = _mock_get_db_session
+@pytest.fixture(autouse=True)
+def _override_dependencies():
+    """Override the DB session dependency globally for these tests."""
+    previous = app.dependency_overrides.copy()
+    app.dependency_overrides[get_db_session] = _mock_get_db_session
+    yield
+    app.dependency_overrides.clear()
+    app.dependency_overrides.update(previous)
 
 client = TestClient(app)
 

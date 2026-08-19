@@ -164,7 +164,7 @@ def _make_test_state(
 
 
 def _patch_gemini(return_value=None, side_effect=None):
-    """Return a context-manager that patches get_gemini_client."""
+    """Return a context-manager that patches the reasoning client factory."""
     mock_client = MagicMock()
     if side_effect:
         mock_client.generate.side_effect = side_effect
@@ -172,7 +172,7 @@ def _patch_gemini(return_value=None, side_effect=None):
         mock_client.generate.return_value = return_value or MOCK_HYPOTHESES_RESPONSE
 
     return patch(
-        "app.agents.reasoning_agent.get_gemini_client",
+        "app.agents.reasoning_agent.get_reasoning_client",
         return_value=mock_client,
     )
 

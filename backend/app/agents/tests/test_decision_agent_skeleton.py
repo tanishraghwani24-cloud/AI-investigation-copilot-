@@ -409,7 +409,7 @@ class TestGraphIntegration:
 
         state = _make_test_state()
         with patch(
-            "app.agents.reasoning_agent.get_gemini_client",
+            "app.agents.reasoning_agent.get_reasoning_client",
             return_value=mock_reasoning_client,
         ), patch(
             "app.agents.decision_agent.get_gemini_client",

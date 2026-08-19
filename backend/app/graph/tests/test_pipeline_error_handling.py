@@ -217,11 +217,11 @@ async def db_session():
 
 @pytest.fixture
 def mock_gemini():
-    """Patch get_gemini_client in both reasoning_agent and decision_agent.
+    """Patch the reasoning client factory and decision Gemini client.
 
     The google-genai SDK raises ValueError when api_key is empty, so we
-    must mock get_gemini_client (not just GeminiClient.generate) to
-    prevent the constructor from reaching the real SDK.
+    must mock the client factories (not just ``generate``) to prevent
+    the constructors from reaching the real SDK.
 
     Both reasoning and decision agents use Gemini. The mock uses
     side_effect to return the appropriate response based on the
@@ -281,7 +281,7 @@ def mock_gemini():
     mock_client.generate.side_effect = _side_effect
 
     with patch(
-        "app.agents.reasoning_agent.get_gemini_client",
+        "app.agents.reasoning_agent.get_reasoning_client",
         return_value=mock_client,
     ), patch(
         "app.agents.decision_agent.get_gemini_client",
