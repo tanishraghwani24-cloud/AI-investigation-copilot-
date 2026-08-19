@@ -29,7 +29,8 @@ from app.schemas.investigation_state import (
     InvestigationState,
     SeverityLevel,
 )
-from app.services.gemini_client import GeminiClientError, get_gemini_client
+from app.services.gemini_client import GeminiClientError, get_reasoning_client
+
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,11 @@ logger = logging.getLogger(__name__)
 class HypothesesResponse(BaseModel):
     """Schema for Gemini to return multiple hypotheses."""
     hypotheses: list[Hypothesis]
+
+
+class GroundingViolationError(Exception):
+    """Raised when the model output mentions unavailable data categories."""
+    pass
 
 
 _EVIDENCE_ID_PATTERN = re.compile(r"\b(?:TXN|DOC|CUST|ACC|ANOM)-[A-Z0-9-]+\b")
@@ -165,6 +171,36 @@ def _normalise_hypotheses(
             "contradicting_evidence": contradicting,
         }))
     return normalised
+
+
+def _check_grounding_violation(hypotheses: list[Hypothesis], state: InvestigationState) -> str | None:
+    """Return an error message if the response violates grounding rules, else None."""
+    forbidden_terms = [
+        "biometric", "face", "facial",
+        "history", "past behavior", "previous transaction", "historical",
+        "profile", "demographic", "kyc",
+        "document", "passport", "id card", "invoice",
+        "alert", "risk indicator",
+        "channel", "mobile", "web", "ip address", "device"
+    ]
+    
+    available_text = " ".join([v.lower() for v in _available_evidence_values(state)])
+    
+    for hyp in hypotheses:
+        # Check title, evidence, and factual part of description
+        desc_factual = hyp.description.lower().split("recommend")[0]
+        text_to_check = (
+            hyp.title.lower() + " " + 
+            desc_factual + " " + 
+            " ".join(hyp.supporting_evidence).lower() + " " +
+            " ".join(hyp.contradicting_evidence).lower()
+        )
+        
+        for term in forbidden_terms:
+            if term in text_to_check and term not in available_text:
+                return f"Used unavailable data category '{term}'."
+                
+    return None
 
 
 # ── Round 5: Compliance alignment ────────────────────────────────────
@@ -345,25 +381,36 @@ def reasoning_agent(state: InvestigationState) -> dict:
     """
     prompt = _build_prompt(state)
 
-    client = get_gemini_client()
+    client = get_reasoning_client()
 
     try:
         response = _get_hypotheses(client, prompt)
+        violation = _check_grounding_violation(response.hypotheses, state)
+        if violation:
+            raise GroundingViolationError(violation)
     except Exception as exc:
-        if not _is_malformed_structured_output(exc):
+        if not (_is_malformed_structured_output(exc) or isinstance(exc, GroundingViolationError)):
             logger.exception("Gemini call failed in reasoning_agent")
             raise
 
-        logger.warning("Malformed Gemini reasoning response; retrying once")
-        from app.prompts.reasoning_prompts import build_reasoning_retry_prompt
-        retry_prompt = build_reasoning_retry_prompt(prompt)
+        logger.warning("Malformed or ungrounded Gemini reasoning response; retrying once")
+        from app.prompts.reasoning_prompts import build_reasoning_retry_prompt, build_grounding_retry_prompt
+        
+        if isinstance(exc, GroundingViolationError):
+            retry_prompt = build_grounding_retry_prompt(prompt, str(exc))
+        else:
+            retry_prompt = build_reasoning_retry_prompt(prompt)
+            
         try:
             response = _get_hypotheses(client, retry_prompt)
+            violation = _check_grounding_violation(response.hypotheses, state)
+            if violation:
+                raise GroundingViolationError(violation)
         except Exception as retry_exc:
-            if not _is_malformed_structured_output(retry_exc):
+            if not (_is_malformed_structured_output(retry_exc) or isinstance(retry_exc, GroundingViolationError)):
                 logger.exception("Gemini retry failed in reasoning_agent")
                 raise
-            logger.warning("Gemini reasoning retry also returned malformed output")
+            logger.warning("Gemini reasoning retry also returned malformed or ungrounded output")
             return {
                 "investigation_reasoning": InvestigationReasoning(
                     status=AgentStatus.FAILED,
@@ -378,6 +425,7 @@ def reasoning_agent(state: InvestigationState) -> dict:
                     ],
                 ),
             }
+
     hypotheses = _normalise_hypotheses(response.hypotheses, state)
     # Round 5: cross-reference existing compliance findings (if available).
     hypotheses = _apply_compliance_alignment(hypotheses, state)

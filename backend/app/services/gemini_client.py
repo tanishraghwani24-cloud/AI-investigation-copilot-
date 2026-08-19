@@ -114,7 +114,8 @@ class GeminiClient:
         client_kwargs: dict[str, Any] = {"api_key": self._api_key}
         if self._timeout_seconds is not None:
             client_kwargs["http_options"] = genai_types.HttpOptions(
-                timeout=max(1, int(self._timeout_seconds * 1000))
+                timeout=max(1, int(self._timeout_seconds * 1000)),
+                client_args={"timeout": float(self._timeout_seconds)},
             )
         self._client = genai.Client(**client_kwargs)
 
@@ -379,7 +380,7 @@ def get_gemini_client() -> GeminiClient:
             )
         ),
     }
-    timeout = getattr(settings, "GEMINI_TIMEOUT_SECONDS", None)
+    timeout = getattr(settings, "GEMINI_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS)
     if isinstance(timeout, (int, float)):
         kwargs["timeout_seconds"] = float(timeout)
 
@@ -387,4 +388,47 @@ def get_gemini_client() -> GeminiClient:
         api_key=settings.GEMINI_API_KEY,
         model_name=settings.GEMINI_MODEL,
         **kwargs,
+    )
+
+
+def get_reasoning_client() -> object:
+    """Return the configured LLM client for the Reasoning Agent only."""
+    provider = str(getattr(settings, "REASONING_LLM_PROVIDER", "gemini")).strip().lower()
+    if provider == "gemini":
+        return get_gemini_client()
+    if provider == "ollama":
+        from app.services.ollama_client import OllamaClient
+
+        kwargs: dict[str, Any] = {
+            "max_retries": int(_setting("OLLAMA_MAX_RETRIES", DEFAULT_MAX_RETRIES)),
+            "backoff_base_seconds": float(
+                _setting("OLLAMA_BACKOFF_BASE_SECONDS", DEFAULT_BACKOFF_BASE_SECONDS)
+            ),
+            "backoff_max_seconds": float(
+                _setting("OLLAMA_BACKOFF_MAX_SECONDS", DEFAULT_BACKOFF_MAX_SECONDS)
+            ),
+            "structured_correction_retries": int(
+                _setting(
+                    "OLLAMA_STRUCTURED_CORRECTION_RETRIES",
+                    DEFAULT_STRUCTURED_CORRECTION_RETRIES,
+                )
+            ),
+            "keep_alive": getattr(settings, "OLLAMA_KEEP_ALIVE", "5m"),
+            "options": {
+                "num_ctx": int(getattr(settings, "OLLAMA_NUM_CTX", 2048)),
+                "num_predict": int(getattr(settings, "OLLAMA_NUM_PREDICT", 1024)),
+                "temperature": float(getattr(settings, "OLLAMA_TEMPERATURE", 0.0)),
+            }
+        }
+        timeout = getattr(settings, "OLLAMA_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS)
+        if isinstance(timeout, (int, float)):
+            kwargs["timeout_seconds"] = float(timeout)
+
+        return OllamaClient(
+            base_url=settings.OLLAMA_BASE_URL,
+            model_name=settings.OLLAMA_MODEL,
+            **kwargs,
+        )
+    raise GeminiClientError(
+        f"Unsupported reasoning LLM provider: {provider!r}. Expected 'gemini' or 'ollama'."
     )
