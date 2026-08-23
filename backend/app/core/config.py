@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     REASONING_LLM_PROVIDER: str = "gemini"
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "llama3.1:8b"
-    OLLAMA_TIMEOUT_SECONDS: float = 30.0
+    OLLAMA_TIMEOUT_SECONDS: float = 120.0
     OLLAMA_MAX_RETRIES: int = 1
     OLLAMA_BACKOFF_BASE_SECONDS: float = 0.5
     OLLAMA_BACKOFF_MAX_SECONDS: float = 8.0

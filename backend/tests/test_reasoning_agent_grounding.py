@@ -23,11 +23,10 @@ def test_reasoning_agent_grounding_no_hallucination():
     
     # Setup sparse state exactly like the failing grounding test
     case_input = CaseInput(
-        description=(
-            "Only the following facts are known: Account A normally transfers less than $100. "
+        alert_reason=(
+            "Account A normally transfers less than $100. "
             "Transaction TX-001 transfers exactly $950 from Account A to Account B. "
-            "No other facts, documents, alerts, biometrics, customer profile information, "
-            "or transaction history are available."
+            "No other information is available."
         ),
         transactions=[
             Transaction(
