@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.document import DocumentRecord
 from app.models.investigation import InvestigationCase
@@ -85,6 +86,7 @@ class InvestigationRepository:
         if record is None:
             return None
         record.state_json = state_json
+        flag_modified(record, "state_json")
         record.status = state_json.get("current_stage", record.status)
         record.updated_at = datetime.now(timezone.utc)
         await session.flush()
