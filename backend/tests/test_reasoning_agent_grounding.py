@@ -1,6 +1,10 @@
 import pytest
 from datetime import datetime
 
+# Exclude from the default offline suite; run with: pytest -m ollama_integration
+pytestmark = pytest.mark.ollama_integration
+
+
 from app.schemas.investigation_state import (
     InvestigationState,
     CaseInput,
