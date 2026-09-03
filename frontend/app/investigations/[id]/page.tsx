@@ -12,6 +12,8 @@ import { StatusBadge } from "@/components/investigations/StatusBadge";
 import { CurrentStage } from "@/types";
 import type { InvestigationState } from "@/types";
 import { AutoRefresh } from "@/components/investigations/AutoRefresh";
+import { InvestigationPipeline } from "@/components/investigations/InvestigationPipeline";
+import { InvestigationGraphs } from "@/components/investigations/InvestigationGraphs";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -97,6 +99,8 @@ export default async function InvestigationDetailPage({ params }: PageProps) {
         </div>
       ) : null}
 
+      <InvestigationPipeline investigation={investigation} />
+
       <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-4">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 text-gray-600"><FileText className="h-5 w-5" /></div>
@@ -146,6 +150,7 @@ export default async function InvestigationDetailPage({ params }: PageProps) {
       <CompliancePanel data={investigation.evidence_compliance_validation} />
       <DecisionPanel data={investigation.decision_optimization} />
       <ReportViewer caseId={investigation.case_id} report={investigation.investigation_report} />
+      <InvestigationGraphs graphs={investigation.investigation_report?.graphs} />
       <DocumentUpload investigationId={investigation.case_id} />
 
       {hasErrors && (

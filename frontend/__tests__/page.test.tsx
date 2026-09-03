@@ -114,13 +114,16 @@ describe('InvestigationDetailPage', () => {
     expect(screen.getByText('CASE-TEST-001')).toBeInTheDocument();
     expect(screen.getAllByText(/John Doe/).length).toBeGreaterThan(0);
 
-    // Context Panel
-    expect(screen.getByText('Context Intelligence')).toBeInTheDocument();
+    // Context Panel — "Context Intelligence" also appears as a stage label
+    // in the InvestigationPipeline execution graph, so it's expected to
+    // match more than once (same idiom as the "John Doe" assertion above).
+    expect(screen.getAllByText('Context Intelligence').length).toBeGreaterThan(0);
     expect(screen.getByText('This is a test context summary.')).toBeInTheDocument();
     expect(screen.getByText('Indicator 1')).toBeInTheDocument();
 
-    // Reasoning Panel
-    expect(screen.getByText('Investigation Reasoning')).toBeInTheDocument();
+    // Reasoning Panel — "Investigation Reasoning" also appears as a stage
+    // label in the InvestigationPipeline execution graph.
+    expect(screen.getAllByText('Investigation Reasoning').length).toBeGreaterThan(0);
     expect(screen.getByText('Test reasoning')).toBeInTheDocument();
     expect(screen.getByText('Money Laundering')).toBeInTheDocument();
 
