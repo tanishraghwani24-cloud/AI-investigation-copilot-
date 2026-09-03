@@ -12,6 +12,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.rate_limit import rate_limit
 from app.db.session import async_session_factory, get_db_session
 from app.mock_bank.generator import MockBankScenario, generate_investigation_data
 from app.schemas.investigation_state import (
@@ -294,6 +295,7 @@ async def run_investigation(
     case_id: CaseIdPath,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db_session),
+    _rate_limited: None = Depends(rate_limit("investigation_run", limit=10)),
 ) -> InvestigationRunResponse:
     """Acknowledge a run and execute the existing graph in the background."""
     started = await _investigation_service.start_investigation(case_id, db)

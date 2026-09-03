@@ -3,9 +3,21 @@ import type {
   SupportingDocument,
 } from "@/types";
 
-const API_BASE = (
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"
-).replace(/\/$/, "");
+// The backend requires a shared-secret X-API-Key header (P1 hardening).
+// That secret must never reach browser JS. Server Components (this code
+// running in Node.js) call the backend directly and attach it from a
+// non-public env var; the browser instead calls the same-origin Next.js
+// proxy route, which attaches the secret server-side. See
+// app/api/proxy/[...path]/route.ts.
+const isServer = typeof window === "undefined";
+
+const API_BASE = isServer
+  ? (
+      process.env.BACKEND_INTERNAL_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      "http://127.0.0.1:8000/api"
+    ).replace(/\/$/, "")
+  : "/api/proxy";
 
 export class ApiError extends Error {
   readonly status?: number;
@@ -34,14 +46,23 @@ async function requestJson<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    ...(init?.headers as Record<string, string> | undefined),
+  };
+  // Only attach the secret on the server: process.env.API_SHARED_SECRET is
+  // never inlined into the client bundle (only NEXT_PUBLIC_* vars are), so
+  // this is always undefined in the browser — the header is simply omitted
+  // there and the same-origin proxy attaches it instead.
+  if (isServer && process.env.API_SHARED_SECRET) {
+    headers["X-API-Key"] = process.env.API_SHARED_SECRET;
+  }
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE}${path}`, {
       ...init,
-      headers: {
-        Accept: "application/json",
-        ...(init?.headers ?? {}),
-      },
+      headers,
     });
   } catch {
     throw new ApiError("The investigation service is unavailable. Check your connection and try again.");

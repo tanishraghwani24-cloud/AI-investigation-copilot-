@@ -1,6 +1,39 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
+
+@pytest.fixture(autouse=True)
+def _bypass_api_auth():
+    """Bypass the shared-secret API auth dependency for the existing suite.
+
+    These tests exercise business logic via TestClient and predate the
+    P1 API-auth hardening; they were never written to supply X-API-Key.
+    Auth itself (missing/invalid/valid credential, open health route) is
+    verified separately — see app/api/tests/test_api_auth.py.
+    """
+    from app.main import app
+    from app.core.security import require_api_key
+
+    app.dependency_overrides[require_api_key] = lambda: None
+    yield
+    app.dependency_overrides.pop(require_api_key, None)
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    """Reset the in-memory rate limiter between tests.
+
+    TestClient reuses a fixed client IP, so without this, sequential tests
+    hitting a rate-limited route (e.g. document upload) would trip each
+    other's limits.
+    """
+    from app.core.rate_limit import _hits
+
+    _hits.clear()
+    yield
+    _hits.clear()
+
+
 @pytest.fixture(autouse=True)
 def mock_gemini_boundary(request):
     """Globally mock the Gemini boundary for offline tests to prevent live API calls.

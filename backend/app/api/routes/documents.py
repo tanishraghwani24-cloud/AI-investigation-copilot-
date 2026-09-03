@@ -21,6 +21,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Path as ApiPath, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.rate_limit import rate_limit
 from app.db.repository import DocumentRepository
 from app.db.session import get_db_session
 from app.schemas.investigation_state import (
@@ -30,6 +31,12 @@ from app.schemas.investigation_state import (
 from app.services.document_service import process_document
 
 router = APIRouter()
+
+# Matches document_service._MAX_FILE_SIZE_BYTES (the processing limit).
+# Enforced here too so an oversized upload is rejected while streaming in,
+# rather than after being fully buffered in memory.
+_MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+_UPLOAD_READ_CHUNK_BYTES = 1024 * 1024
 
 CaseIdPath = Annotated[
     str,
@@ -90,6 +97,32 @@ def _is_processable(filename: str | None) -> bool:
     return _is_pdf(filename) or _is_image(filename)
 
 
+async def _read_upload_bounded(file: UploadFile, max_bytes: int) -> bytes:
+    """Read an upload in chunks, aborting as soon as it exceeds `max_bytes`.
+
+    Avoids buffering an arbitrarily large upload into memory before any size
+    check runs — the previous behaviour of ``await file.read()`` followed by
+    a size check afterwards.
+    """
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(_UPLOAD_READ_CHUNK_BYTES)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    f"Uploaded file exceeds the maximum allowed size of "
+                    f"{max_bytes // (1024 * 1024)} MiB."
+                ),
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 @router.post(
     "/investigations/{case_id}/documents",
     response_model=SupportingDocument,
@@ -99,6 +132,7 @@ async def upload_document(
     file: UploadFile = File(...),
     document_type: DocumentTypeForm = "OTHER",
     db: AsyncSession = Depends(get_db_session),
+    _rate_limited: None = Depends(rate_limit("document_upload", limit=10)),
 ) -> SupportingDocument:
     """Upload a supporting document for an investigation case.
 
@@ -144,7 +178,7 @@ async def upload_document(
     stored_filename = f"{document_id}{file_extension}"
     file_path = case_dir / stored_filename
 
-    contents = await file.read()
+    contents = await _read_upload_bounded(file, _MAX_UPLOAD_BYTES)
     file_path.write_bytes(contents)
 
     # -- Build file URL (local path) --

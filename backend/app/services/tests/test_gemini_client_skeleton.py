@@ -239,7 +239,7 @@ class TestConfigIntegration:
 
     def test_gemini_model_default(self) -> None:
         """GEMINI_MODEL defaults to gemini-3.5-flash."""
-        assert Settings.model_fields["GEMINI_MODEL"].default == "gemini-3.5-flash"
+        assert Settings.model_fields["GEMINI_MODEL"].default == "gemini-3.7-flash"
 
     def test_gemini_api_key_default_empty(self) -> None:
         """GEMINI_API_KEY defaults to empty string (allows tests to run)."""

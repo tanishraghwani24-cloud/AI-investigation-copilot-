@@ -4,9 +4,10 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { AgentStatus } from "@/types";
 import type { InvestigationReport } from "@/types";
 
-const API_BASE = (
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"
-).replace(/\/$/, "");
+// Always browser-initiated (plain <a> navigation), so this must go through
+// the same-origin proxy — the backend's shared-secret header can't be
+// attached to a direct anchor navigation. See services/api.ts.
+const API_BASE = "/api/proxy";
 
 interface ReportViewerProps {
   caseId: string;

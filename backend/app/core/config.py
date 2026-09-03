@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     ENV: str = "development"
     API_V1_PREFIX: str = "/api"
 
+    # --- API authentication ---
+    # Shared secret required on protected routes via the X-API-Key header.
+    # Minimal hackathon-scoped auth — not a user/session/RBAC system.
+    API_SHARED_SECRET: str = ""
+
     # --- Database (Supabase PostgreSQL) ---
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/investigation_db"
 
