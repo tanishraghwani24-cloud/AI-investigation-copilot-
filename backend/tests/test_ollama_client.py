@@ -482,6 +482,8 @@ class TestProviderSelection:
             mock_settings.GEMINI_BACKOFF_BASE_SECONDS = 0.5
             mock_settings.GEMINI_BACKOFF_MAX_SECONDS = 8.0
             mock_settings.GEMINI_STRUCTURED_CORRECTION_RETRIES = 1
+            mock_settings.LLM_PRIMARY_PROVIDER = "gemini"
+            mock_settings.LLM_FALLBACK_PROVIDER = "none"
 
             client = get_reasoning_client()
 

@@ -48,7 +48,7 @@ _NODE_STAGE_MAP: dict[str, str] = {
 }
 
 
-def run_investigation(state: InvestigationState) -> InvestigationState:
+async def run_investigation(state: InvestigationState) -> InvestigationState:
     """Run the full investigation graph on the given state.
 
     Args:
@@ -57,7 +57,7 @@ def run_investigation(state: InvestigationState) -> InvestigationState:
     Returns:
         The InvestigationState after all graph nodes have executed.
     """
-    result = _investigation_graph.invoke(state.model_dump(mode="json"))
+    result = await _investigation_graph.ainvoke(state.model_dump(mode="json"))
     return InvestigationState(**result)
 
 
@@ -248,26 +248,16 @@ def _identify_failed_node(accumulated_state: dict) -> str:
         ("investigation_report", REPORTING),
     ]
 
-    last_completed_idx = -1
-    for idx, (field, _node) in enumerate(output_fields):
+    for field, node in output_fields:
         output = accumulated_state.get(field)
         if output is None:
-            continue
-        if isinstance(output, dict) and output.get("status") == AgentStatus.IN_PROGRESS.value:
-            continue
-        if isinstance(output, dict) and output.get("status") not in (
-            None,
-            AgentStatus.COMPLETED.value,
-            AgentStatus.FAILED.value,
-        ):
-            continue
-        if output is not None:
-            last_completed_idx = idx
-
-    # The failed node is the one after the last completed
-    failed_idx = last_completed_idx + 1
-    if failed_idx < len(NODE_ORDER):
-        return NODE_ORDER[failed_idx]
-
-    # Fallback: if all outputs are populated, it was reporting
+            return node
+            
+        status = output.get("status") if isinstance(output, dict) else getattr(output, "status", None)
+        if hasattr(status, "value"):
+            status = status.value
+            
+        if status in (AgentStatus.IN_PROGRESS.value, AgentStatus.FAILED.value):
+            return node
+            
     return REPORTING

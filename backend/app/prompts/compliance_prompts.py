@@ -37,14 +37,15 @@ Return ONLY a JSON object containing `compliance_mappings`, `evidence_gaps`, and
 Each item in `compliance_mappings` must contain: `regulation_id`, `regulation_name`, `description`, `is_violated`, `severity` (LOW, MEDIUM, or HIGH), and `evidence_references`.
 
 === QUALITY RULES & CONSTRAINTS ===
-1. BE SPECIFIC AND EVIDENCE-GROUNDED: Do not use generic boilerplate like "Potential suspicious activity was identified." Instead, explicitly state the facts: "A structured wire transfer of $9,900 from entity X to high-risk jurisdiction Y bypasses the $10,000 reporting threshold (Structuring/Smurfing)."
-2. CONNECT TO EVIDENCE: Explain exactly *why* a finding is relevant by clearly connecting it to the specific transactions, entities, documents, or anomalies present in the investigation.
-3. CONSERVATIVE ON INCOMPLETE DATA: If evidence is incomplete or missing (e.g., missing documents, low-information alerts):
-   - Explicitly distinguish what evidence exists from what is missing.
-   - State what conclusion can safely be made without inventing facts.
-   - If a concern cannot be confirmed, explicitly state that evidence is insufficient, use no evidence references, and do not call it a violation (`is_violated`: false).
-4. TRACEABILITY GUARANTEE: Every single value in `evidence_references` MUST be an exact, literal match from the `VALID EVIDENCE IDENTIFIERS` list provided above. Never invent, hallucinate, or guess identifiers.
-5. NO HALLUCINATION: Do not claim a regulatory breach, sanctions hit, KYC failure, or fact that the case materials do not establish. 
-6. MISSING EVIDENCE GAPS: Use the `evidence_gaps` list to identify missing identity, source-of-funds, transaction, or beneficial-owner documentation that would be needed to resolve ambiguities. Do not claim that supplied evidence is missing.
-7. FORMATTING: Return ONLY the raw JSON object. No markdown, no commentary, no conversational text.
-"""
+1. STRICT EVIDENCE GROUNDING: You MUST NOT invent, alter, or hallucinate transaction amounts, transaction IDs, transaction directions (sender/receiver), counterparties, jurisdictions, dates, or regulatory thresholds.
+2. NO ASSUMED INTENT: Do not claim intentional criminal/regulatory conduct (such as "structuring" or "smurfing") unless the supplied evidence explicitly establishes it.
+3. DISTINGUISH SIGNALS FROM VIOLATIONS: 
+   - A suspicious indicator or risk signal is NOT a confirmed violation.
+   - Set `is_violated`: false if the evidence only indicates a potential concern or risk signal.
+   - Set `is_violated`: true ONLY if the supplied evidence incontrovertibly establishes a violation of a specific regulation.
+4. EXACT AMOUNTS AND DIRECTIONS: Use the exact amounts and currencies provided in the case data. Do not alter them to fit a regulatory threshold. Ensure the sender and receiver are accurately described.
+5. CONNECT TO EVIDENCE: Explain exactly *why* a finding is relevant by clearly connecting it to the specific transactions, entities, documents, or anomalies present.
+6. CONSERVATIVE ON INCOMPLETE DATA: If evidence is incomplete, explicitly state what evidence exists and what is missing. If a concern cannot be confirmed, state that evidence is insufficient.
+7. TRACEABILITY GUARANTEE: Every single value in `evidence_references` MUST be an exact, literal match from the `VALID EVIDENCE IDENTIFIERS` list provided above. Never invent or guess identifiers.
+8. MISSING EVIDENCE GAPS: Use the `evidence_gaps` list to identify missing identity, source-of-funds, or transaction documentation needed to resolve ambiguities.
+9. FORMATTING: Return ONLY the raw JSON object. No markdown, no commentary, no conversational text."""

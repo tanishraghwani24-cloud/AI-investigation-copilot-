@@ -133,10 +133,10 @@ def _gemini_response(
 
 
 def _patch_gemini(response: EvidenceComplianceValidation):
-    """Return a context-manager that patches get_gemini_client."""
+    """Return a context-manager that patches get_reasoning_client."""
     client = MagicMock()
     client.generate.return_value = response
-    return patch("app.agents.compliance_agent.get_gemini_client", return_value=client)
+    return patch("app.agents.compliance_agent.get_reasoning_client", return_value=client)
 
 
 def _assert_traceable(mapping: ComplianceMapping, available_ids: set[str]) -> None:

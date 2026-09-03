@@ -16,6 +16,11 @@ from app.db.session import Base
 # Import all models so their tables are registered on Base.metadata
 from app.models.document import DocumentRecord  # noqa: F401
 from app.models.investigation import InvestigationCase  # noqa: F401
+from app.models.mock_bank import (  # noqa: F401
+    MockBankAccount,
+    MockBankCustomer,
+    MockBankTransaction,
+)
 
 # -- Alembic Config object --
 config = context.config

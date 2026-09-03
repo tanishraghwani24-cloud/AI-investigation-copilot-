@@ -43,7 +43,7 @@ class TestDecisionRecommendation:
     def test_one_recommendation_selected(self) -> None:
         """Exactly one recommended option is selected."""
         state = _make_test_state()
-        with patch("app.agents.decision_agent.get_gemini_client") as mock:
+        with patch("app.agents.decision_agent.get_reasoning_client") as mock:
             mock.return_value.generate.return_value = MOCK_RESPONSE
             result = decision_agent(state)
 
@@ -54,7 +54,7 @@ class TestDecisionRecommendation:
     def test_decision_rationale_populated(self) -> None:
         """decision_rationale is populated and not generic."""
         state = _make_test_state()
-        with patch("app.agents.decision_agent.get_gemini_client") as mock:
+        with patch("app.agents.decision_agent.get_reasoning_client") as mock:
             mock.return_value.generate.return_value = MOCK_RESPONSE
             result = decision_agent(state)
 
@@ -66,7 +66,7 @@ class TestDecisionRecommendation:
     def test_deepened_fields_have_at_least_two_entries(self) -> None:
         """Every option has >=2 pros, cons, risks, and mitigations."""
         state = _make_test_state()
-        with patch("app.agents.decision_agent.get_gemini_client") as mock:
+        with patch("app.agents.decision_agent.get_reasoning_client") as mock:
             mock.return_value.generate.return_value = MOCK_RESPONSE
             result = decision_agent(state)
 

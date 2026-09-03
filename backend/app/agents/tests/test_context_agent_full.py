@@ -117,33 +117,33 @@ class TestNoDocument:
     def test_context_intelligence_exists(self) -> None:
         """Result contains context_intelligence."""
         state = _make_state_no_docs()
-        result = context_agent(state)
+        result = __import__("asyncio").run(context_agent(state))
         assert "context_intelligence" in result
         assert isinstance(result["context_intelligence"], ContextIntelligence)
 
     def test_status_completed(self) -> None:
         """Status is COMPLETED."""
         state = _make_state_no_docs()
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         assert ci.status == AgentStatus.COMPLETED
 
     def test_context_summary_non_empty(self) -> None:
         """context_summary is non-empty."""
         state = _make_state_no_docs()
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         assert ci.context_summary is not None
         assert len(ci.context_summary) > 0
 
     def test_key_indicators_non_empty(self) -> None:
         """key_indicators list is non-empty."""
         state = _make_state_no_docs()
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         assert len(ci.key_indicators) > 0
 
     def test_risk_score_in_range(self) -> None:
         """Risk score is between 0.0 and 1.0."""
         state = _make_state_no_docs()
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         assert ci.risk_score is not None
         assert 0.0 <= ci.risk_score <= 1.0
 
@@ -162,20 +162,20 @@ class TestDocumentWithExtractedText:
     def test_context_intelligence_exists(self) -> None:
         """Result contains context_intelligence."""
         state = _make_state_with_doc(self._EXTRACTED_TEXT)
-        result = context_agent(state)
+        result = __import__("asyncio").run(context_agent(state))
         assert "context_intelligence" in result
 
     def test_context_summary_non_empty(self) -> None:
         """context_summary is non-empty."""
         state = _make_state_with_doc(self._EXTRACTED_TEXT)
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         assert ci.context_summary is not None
         assert len(ci.context_summary) > 0
 
     def test_context_summary_reflects_document_evidence(self) -> None:
         """context_summary mentions evidence from the document."""
         state = _make_state_with_doc(self._EXTRACTED_TEXT)
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         summary_lower = ci.context_summary.lower()
         # The document mentions an international wire transfer of USD 25000.
         # At least one of these distinctive terms should appear.
@@ -188,7 +188,7 @@ class TestDocumentWithExtractedText:
     def test_key_indicator_reflects_document(self) -> None:
         """At least one key indicator reflects document evidence."""
         state = _make_state_with_doc(self._EXTRACTED_TEXT)
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         doc_indicators = [
             ind for ind in ci.key_indicators
             if "document" in ind.lower() or "supporting" in ind.lower()
@@ -214,8 +214,8 @@ class TestDocumentChangesSynthesis:
         state_a = _make_state_no_docs()
         state_b = _make_state_with_doc(self._EXTRACTED_TEXT)
 
-        ci_a = context_agent(state_a)["context_intelligence"]
-        ci_b = context_agent(state_b)["context_intelligence"]
+        ci_a = __import__("asyncio").run(context_agent(state_a))["context_intelligence"]
+        ci_b = __import__("asyncio").run(context_agent(state_b))["context_intelligence"]
 
         assert ci_a.context_summary != ci_b.context_summary, (
             "Context summary should change when document evidence is added."
@@ -226,8 +226,8 @@ class TestDocumentChangesSynthesis:
         state_a = _make_state_no_docs()
         state_b = _make_state_with_doc(self._EXTRACTED_TEXT)
 
-        ci_a = context_agent(state_a)["context_intelligence"]
-        ci_b = context_agent(state_b)["context_intelligence"]
+        ci_a = __import__("asyncio").run(context_agent(state_a))["context_intelligence"]
+        ci_b = __import__("asyncio").run(context_agent(state_b))["context_intelligence"]
 
         # B should reference document evidence
         summary_b_lower = ci_b.context_summary.lower()
@@ -250,7 +250,7 @@ class TestEmptyDocument:
     def test_none_extracted_text_no_crash(self) -> None:
         """Document with None extracted_text does not crash."""
         state = _make_state_with_doc(extracted_text=None)
-        result = context_agent(state)
+        result = __import__("asyncio").run(context_agent(state))
         ci = result["context_intelligence"]
         assert ci.status == AgentStatus.COMPLETED
         assert ci.context_summary is not None
@@ -259,14 +259,14 @@ class TestEmptyDocument:
     def test_empty_string_no_crash(self) -> None:
         """Document with empty string extracted_text does not crash."""
         state = _make_state_with_doc(extracted_text="")
-        result = context_agent(state)
+        result = __import__("asyncio").run(context_agent(state))
         ci = result["context_intelligence"]
         assert ci.status == AgentStatus.COMPLETED
 
     def test_whitespace_only_no_crash(self) -> None:
         """Document with whitespace-only extracted_text does not crash."""
         state = _make_state_with_doc(extracted_text="   \n\t  ")
-        result = context_agent(state)
+        result = __import__("asyncio").run(context_agent(state))
         ci = result["context_intelligence"]
         assert ci.status == AgentStatus.COMPLETED
 
@@ -275,8 +275,8 @@ class TestEmptyDocument:
         state_no_docs = _make_state_no_docs()
         state_empty_doc = _make_state_with_doc(extracted_text=None)
 
-        ci_no = context_agent(state_no_docs)["context_intelligence"]
-        ci_empty = context_agent(state_empty_doc)["context_intelligence"]
+        ci_no = __import__("asyncio").run(context_agent(state_no_docs))["context_intelligence"]
+        ci_empty = __import__("asyncio").run(context_agent(state_empty_doc))["context_intelligence"]
 
         # Empty document should not introduce document-related indicators
         doc_indicators = [
@@ -324,7 +324,7 @@ class TestMultipleDocuments:
             case_id="CASE-R3-MULTI",
             case_input=case_input,
         )
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
 
         # Both documents should contribute to the summary
         summary = ci.context_summary
@@ -354,7 +354,7 @@ class TestMultipleDocuments:
             case_id="CASE-R3-MULTI-IND",
             case_input=case_input,
         )
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
 
         # Should have indicator noting 2 supporting documents
         doc_count_indicators = [
@@ -380,8 +380,8 @@ class TestDeterminism:
     def test_identical_results_no_docs(self) -> None:
         """Two calls with same state (no docs) produce identical output."""
         state = _make_state_no_docs()
-        ci1 = context_agent(state)["context_intelligence"]
-        ci2 = context_agent(state)["context_intelligence"]
+        ci1 = __import__("asyncio").run(context_agent(state))["context_intelligence"]
+        ci2 = __import__("asyncio").run(context_agent(state))["context_intelligence"]
 
         assert ci1.context_summary == ci2.context_summary
         assert ci1.key_indicators == ci2.key_indicators
@@ -391,8 +391,8 @@ class TestDeterminism:
     def test_identical_results_with_docs(self) -> None:
         """Two calls with same state (with docs) produce identical output."""
         state = _make_state_with_doc(self._EXTRACTED_TEXT)
-        ci1 = context_agent(state)["context_intelligence"]
-        ci2 = context_agent(state)["context_intelligence"]
+        ci1 = __import__("asyncio").run(context_agent(state))["context_intelligence"]
+        ci2 = __import__("asyncio").run(context_agent(state))["context_intelligence"]
 
         assert ci1.context_summary == ci2.context_summary
         assert ci1.key_indicators == ci2.key_indicators

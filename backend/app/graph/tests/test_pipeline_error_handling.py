@@ -284,7 +284,7 @@ def mock_gemini():
         "app.agents.reasoning_agent.get_reasoning_client",
         return_value=mock_client,
     ), patch(
-        "app.agents.decision_agent.get_gemini_client",
+        "app.agents.decision_agent.get_reasoning_client",
         return_value=mock_client,
     ):
         yield mock_client
@@ -557,9 +557,9 @@ async def test_downstream_nodes_not_called_after_failure(db_session, mock_gemini
         REPORTING: 0,
     }
 
-    def _tracking_context(st: Any) -> dict:
+    async def _tracking_context(st: Any) -> dict:
         call_tracker[CONTEXT] += 1
-        return context_node(st)
+        return await context_node(st)
 
     def _failing_reasoning(st: Any) -> dict:
         call_tracker[REASONING] += 1

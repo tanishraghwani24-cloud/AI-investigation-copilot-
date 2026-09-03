@@ -15,13 +15,18 @@ Documents with empty/None extracted_text are ignored.
 from __future__ import annotations
 
 import re
+from collections import Counter
 from datetime import timedelta
+
+from app.db.session import async_session_factory
+from app.services.mock_bank_service import MockBankService
 
 from app.schemas.investigation_state import (
     AgentStatus,
     AnomalyType,
     ContextIntelligence,
     DetectedAnomaly,
+    HistoricalBaseline,
     InvestigationState,
     SeverityLevel,
     SupportingDocument,
@@ -428,19 +433,14 @@ def _build_document_indicators(
 # ── Public API ────────────────────────────────────────────────────────
 
 
-def context_agent(state: InvestigationState) -> dict:
+async def context_agent(state: InvestigationState) -> dict:
     """Execute the Context & Evidence Intelligence Agent.
 
     Analyses the transactions and customer data inside *state* and
-    produces a populated ``ContextIntelligence``.  All logic is pure
-    deterministic Python — no LLM, no Gemini, no external services.
+    produces a populated ``ContextIntelligence``.
 
-    Round 3: Also incorporates extracted evidence from any supporting
-    documents available in ``state.case_input.supporting_documents``.
-
-    Round 5: Graceful degradation for sparse-data investigations —
-    handles zero documents, missing/partial customer profiles, and
-    partial Mock Bank data without raising errors.
+    Round 5: Fetches historical transactions via MockBankService to
+    establish a baseline and detect behavioral deviations.
 
     Args:
         state: The current investigation state.
@@ -462,6 +462,53 @@ def context_agent(state: InvestigationState) -> dict:
     customer_name: str | None = getattr(customer, "name", None) if customer else None
     customer_risk: str | None = getattr(customer, "risk_rating", None) if customer else None
 
+    # ── Historical Baseline & Deviation Detection ─────────────────
+    historical_baseline: HistoricalBaseline | None = None
+    account_id = None
+    hist_txns = []
+
+    if transactions:
+        account_id = transactions[0].sender_account
+        current_txn_ids = {t.transaction_id for t in transactions}
+    else:
+        current_txn_ids = set()
+
+    if account_id:
+        svc = MockBankService()
+        async with async_session_factory() as session:
+            try:
+                raw_hist_txns = await svc.get_account_transactions(session, account_id)
+                # Exclude current investigation transactions from the historical baseline
+                hist_txns = [t for t in raw_hist_txns if t.transaction_id not in current_txn_ids]
+            except Exception:
+                pass
+
+        if hist_txns:
+            count = len(hist_txns)
+            avg = sum(t.amount for t in hist_txns) / count
+            max_amt = max(t.amount for t in hist_txns)
+
+            top_types = [t[0] for t in Counter(t.transaction_type for t in hist_txns).most_common(3)]
+            top_channels = [t[0] for t in Counter(t.channel for t in hist_txns).most_common(3)]
+
+            locations = [t.location for t in hist_txns if t.location]
+            top_locs = [t[0] for t in Counter(locations).most_common(3)] if locations else []
+
+            receivers = [t.receiver_account_id for t in hist_txns if t.receiver_account_id]
+            top_receivers = [t[0] for t in Counter(receivers).most_common(3)] if receivers else []
+
+            historical_baseline = HistoricalBaseline(
+                transaction_count=count,
+                average_amount=round(avg, 2),
+                maximum_amount=max_amt,
+                common_types=top_types,
+                common_channels=top_channels,
+                common_locations=top_locs,
+                common_counterparties=top_receivers,
+            )
+        else:
+            historical_baseline = HistoricalBaseline()
+
     # Analyse transactions (unchanged Round 2 logic)
     stats = _compute_transaction_stats(transactions)
     large_txns = _find_large_transactions(transactions)
@@ -480,9 +527,53 @@ def context_agent(state: InvestigationState) -> dict:
 
     anomalies = _build_anomalies(large_txns, rapid_pairs)
 
+    # ── Append Historical Deviations ──────────────────────────────
+    deviation_count = 0
+    if historical_baseline and historical_baseline.transaction_count > 0:
+        hist_types = set(t.transaction_type for t in hist_txns)
+        hist_channels = set(t.channel for t in hist_txns)
+        hist_locs = set(locations)
+        hist_receivers = set(receivers)
+
+        anomaly_counter = len(anomalies)
+
+        for txn in transactions:
+            dev_desc = []
+            if txn.amount > historical_baseline.maximum_amount * 1.5:
+                dev_desc.append(f"amount ${txn.amount:,.2f} is > 1.5x historical max (${historical_baseline.maximum_amount:,.2f})")
+
+            if txn.transaction_type not in hist_types:
+                dev_desc.append(f"type '{txn.transaction_type}' never seen in history")
+
+            if txn.channel not in hist_channels:
+                dev_desc.append(f"channel '{txn.channel}' never seen in history")
+
+            if txn.location and txn.location not in hist_locs:
+                dev_desc.append(f"location '{txn.location}' never seen in history")
+
+            if txn.receiver_account and txn.receiver_account not in hist_receivers:
+                dev_desc.append(f"counterparty '{txn.receiver_account}' never seen in history")
+
+            if dev_desc:
+                anomaly_counter += 1
+                deviation_count += 1
+                desc_str = ", ".join(dev_desc).capitalize()
+                anomalies.append(
+                    DetectedAnomaly(
+                        anomaly_id=f"ANOM-{anomaly_counter:03d}",
+                        anomaly_type=AnomalyType.BEHAVIORAL,
+                        severity=SeverityLevel.MEDIUM,
+                        description=f"Deviation: {desc_str}.",
+                        related_transactions=[txn.transaction_id],
+                    )
+                )
+
     context_summary = _build_context_summary(
         stats, large_txns, rapid_pairs, customer_name, alert_reason, risk_score,
     )
+
+    if historical_baseline and historical_baseline.transaction_count > 0:
+        context_summary += f" Compared to a baseline of {historical_baseline.transaction_count} historical transactions (avg ${historical_baseline.average_amount:,.2f}), the current activity shows {deviation_count} notable behavioral deviation(s)."
 
     # ── Round 3: Document evidence integration ───────────────────
     doc_summary = _build_document_evidence_summary(supporting_documents)
@@ -497,6 +588,7 @@ def context_agent(state: InvestigationState) -> dict:
         status=AgentStatus.COMPLETED,
         context_summary=context_summary,
         key_indicators=key_indicators,
+        historical_baseline=historical_baseline,
         anomalies=anomalies,
         risk_score=risk_score,
     )

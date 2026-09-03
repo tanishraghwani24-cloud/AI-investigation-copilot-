@@ -129,11 +129,11 @@ _MOCK_RESPONSE = _DecisionOptionsResponse(
 
 
 def _patch_gemini():
-    """Return a context-manager that patches get_gemini_client."""
+    """Return a context-manager that patches get_reasoning_client."""
     mock_client = MagicMock()
     mock_client.generate.return_value = _MOCK_RESPONSE
     return patch(
-        "app.agents.decision_agent.get_gemini_client",
+        "app.agents.decision_agent.get_reasoning_client",
         return_value=mock_client,
     )
 
@@ -412,10 +412,10 @@ class TestGraphIntegration:
             "app.agents.reasoning_agent.get_reasoning_client",
             return_value=mock_reasoning_client,
         ), patch(
-            "app.agents.decision_agent.get_gemini_client",
+            "app.agents.decision_agent.get_reasoning_client",
             return_value=mock_decision_client,
         ):
-            result = run_investigation(state)
+            result = __import__("asyncio").run(run_investigation(state))
         return result
 
     def test_graph_produces_decision_options(self) -> None:

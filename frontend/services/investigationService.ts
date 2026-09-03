@@ -26,6 +26,6 @@ export function getInvestigation(id: string): Promise<InvestigationState> {
   return getInvestigationRequest(id);
 }
 
-export function createInvestigation(): Promise<InvestigationState> {
-  return createInvestigationRequest();
+export function createInvestigation(accountId?: string): Promise<InvestigationState> {
+  return createInvestigationRequest(accountId);
 }

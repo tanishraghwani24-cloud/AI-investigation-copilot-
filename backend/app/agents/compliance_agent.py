@@ -6,6 +6,7 @@ cites real evidence or is explicitly labelled as unsupported.
 
 from __future__ import annotations
 
+import json as _json
 import logging
 import re
 
@@ -16,7 +17,7 @@ from app.schemas.investigation_state import (
     InvestigationState,
     SeverityLevel,
 )
-from app.services.gemini_client import GeminiClientError, get_gemini_client
+from app.services.gemini_client import GeminiClientError, get_reasoning_client
 
 logger = logging.getLogger(__name__)
 
@@ -183,11 +184,177 @@ def _normalise_mappings(
 
 from app.prompts.compliance_prompts import build_compliance_prompt
 
+
+# ── Compact prompt builders ──────────────────────────────────────────
+
+
+def _build_compact_case(state: InvestigationState) -> str:
+    """Build a compact JSON summary of case data for the Compliance prompt.
+
+    Preserves all fields needed for compliance analysis:
+    - alert_reason
+    - Transaction: ID, amount, currency, timestamp, sender/receiver, type,
+      channel, description
+    - Customer: ID, name, risk_rating
+    - Merchant: ID, name, category, country, risk_level
+    - Beneficiary: ID, name, country, is_new
+    - Device: ID, type, geolocation, is_known_device
+    - Documents: ID, type, summary, evidence_references, extracted_transactions
+
+    Excluded (PII / metadata not needed for compliance evaluation):
+    - Customer: email, phone, address, date_of_birth, account_open_date,
+      occupation, nationality
+    - Device: ip_address, os, browser
+    - Documents: file_url, file_name, extracted_text, extracted_entities,
+      processing_status, uploaded_at
+    - behavioral_biometrics (entire object)
+    - face_verification (entire object)
+    """
+    case_input = state.case_input
+    compact: dict = {"alert_reason": case_input.alert_reason}
+
+    compact["transactions"] = [
+        {
+            "transaction_id": t.transaction_id,
+            "amount": t.amount,
+            "currency": t.currency,
+            "transaction_type": t.transaction_type,
+            "sender_account": t.sender_account,
+            "receiver_account": t.receiver_account,
+            "timestamp": t.timestamp.isoformat(),
+            "channel": t.channel,
+            **({"description": t.description} if t.description else {}),
+        }
+        for t in case_input.transactions
+    ]
+
+    customer = case_input.customer_profile
+    if customer:
+        compact["customer"] = {
+            "customer_id": customer.customer_id,
+            "name": customer.name,
+            "risk_rating": customer.risk_rating,
+        }
+
+    merchant = case_input.merchant_info
+    if merchant:
+        compact["merchant"] = {
+            "merchant_id": merchant.merchant_id,
+            "name": merchant.name,
+            "category": merchant.category,
+            "country": merchant.country,
+            "risk_level": merchant.risk_level.value if merchant.risk_level else None,
+        }
+
+    beneficiary = case_input.beneficiary_info
+    if beneficiary:
+        compact["beneficiary"] = {
+            "beneficiary_id": beneficiary.beneficiary_id,
+            "name": beneficiary.name,
+            "country": beneficiary.country,
+            "is_new": beneficiary.is_new,
+        }
+
+    device = case_input.device_info
+    if device:
+        compact["device"] = {
+            "device_id": device.device_id,
+            "device_type": device.device_type,
+            "geolocation": device.geolocation,
+            "is_known_device": device.is_known_device,
+        }
+
+    if case_input.supporting_documents:
+        compact["supporting_documents"] = [
+            {
+                "document_id": d.document_id,
+                "document_type": d.document_type,
+                **({"summary": d.summary} if d.summary else {}),
+                **({"evidence_references": d.evidence_references} if d.evidence_references else {}),
+                **({"extracted_transactions": d.extracted_transactions} if d.extracted_transactions else {}),
+            }
+            for d in case_input.supporting_documents
+        ]
+
+    return _json.dumps(compact, indent=2, default=str)
+
+
+def _build_compact_context(state: InvestigationState) -> str:
+    """Build a compact JSON summary of context intelligence for the Compliance prompt.
+
+    Preserves: context_summary, key_indicators, risk_score, anomalies.
+    Excluded: status, historical_baseline.
+    """
+    context = state.context_intelligence
+    if context is None:
+        return "{}"
+
+    compact: dict = {}
+    if context.context_summary:
+        compact["context_summary"] = context.context_summary
+    if context.key_indicators:
+        compact["key_indicators"] = context.key_indicators
+    if context.risk_score is not None:
+        compact["risk_score"] = context.risk_score
+    if context.anomalies:
+        compact["anomalies"] = [
+            {
+                "anomaly_id": a.anomaly_id,
+                "anomaly_type": a.anomaly_type.value,
+                "severity": a.severity.value,
+                "description": a.description,
+                "related_transactions": a.related_transactions,
+            }
+            for a in context.anomalies
+        ]
+    return _json.dumps(compact, indent=2, default=str)
+
+
+def _build_compact_reasoning(state: InvestigationState) -> str:
+    """Build a compact JSON summary of investigation reasoning for the Compliance prompt.
+
+    Preserves:
+    - Hypotheses: hypothesis_id, title, description, confidence,
+      supporting_evidence, contradicting_evidence
+    - recommended_actions
+
+    Excluded:
+    - status (agent lifecycle, not compliance-relevant)
+    - reasoning_summary (compliance doesn't need the narrative summary;
+      the hypotheses themselves contain the relevant analysis)
+    """
+    reasoning = state.investigation_reasoning
+    if reasoning is None:
+        return "{}"
+
+    compact: dict = {}
+    compact["hypotheses"] = [
+        {
+            "hypothesis_id": h.hypothesis_id,
+            "title": h.title,
+            "description": h.description,
+            "confidence": h.confidence,
+            "supporting_evidence": h.supporting_evidence,
+            "contradicting_evidence": h.contradicting_evidence,
+        }
+        for h in reasoning.hypotheses
+    ]
+    if reasoning.recommended_actions:
+        compact["recommended_actions"] = reasoning.recommended_actions
+
+    return _json.dumps(compact, indent=2, default=str)
+
+
 def _build_prompt(state: InvestigationState) -> str:
-    """Build a prompt that exposes all permitted evidence identifiers."""
-    case_json = state.case_input.model_dump_json(indent=2)
-    context_json = state.context_intelligence.model_dump_json(indent=2) if state.context_intelligence else "{}"
-    reasoning_json = state.investigation_reasoning.model_dump_json(indent=2) if state.investigation_reasoning else "{}"
+    """Build a prompt that exposes all permitted evidence identifiers.
+
+    Uses compact JSON summaries instead of full model_dump_json() to
+    reduce prompt size while preserving all evidence IDs, transaction
+    facts, and risk indicators needed for compliance analysis.
+    """
+    case_json = _build_compact_case(state)
+    context_json = _build_compact_context(state)
+    reasoning_json = _build_compact_reasoning(state)
     valid_ids = sorted(_available_evidence_ids(state))
 
     return build_compliance_prompt(
@@ -202,7 +369,7 @@ def compliance_agent(state: InvestigationState) -> dict:
     """Produce evidence-backed ``EvidenceComplianceValidation`` for *state*."""
     prompt = _build_prompt(state)
     try:
-        response = get_gemini_client().generate(
+        response = get_reasoning_client().generate(
             prompt, response_schema=EvidenceComplianceValidation
         )
         response = EvidenceComplianceValidation.model_validate(response)

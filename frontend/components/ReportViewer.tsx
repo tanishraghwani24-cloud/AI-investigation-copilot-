@@ -1,14 +1,19 @@
-import { ClipboardList, FileWarning } from "lucide-react";
+import { ClipboardList, FileWarning, Download } from "lucide-react";
 import { StatusBadge } from "@/components/investigations/StatusBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AgentStatus } from "@/types";
 import type { InvestigationReport } from "@/types";
 
+const API_BASE = (
+  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"
+).replace(/\/$/, "");
+
 interface ReportViewerProps {
+  caseId: string;
   report?: InvestigationReport | null;
 }
 
-export function ReportViewer({ report }: ReportViewerProps) {
+export function ReportViewer({ caseId, report }: ReportViewerProps) {
   const status = report?.status ?? AgentStatus.NOT_STARTED;
 
   return (
@@ -34,13 +39,22 @@ export function ReportViewer({ report }: ReportViewerProps) {
               </div>
             )}
             {report.generated_at && <p className="text-xs text-gray-400">Generated {new Date(report.generated_at).toLocaleString()}</p>}
-            <p className="text-sm text-gray-500">The backend has not supplied a downloadable report reference.</p>
+            <div className="pt-2">
+              <a
+                href={`${API_BASE}/investigations/${encodeURIComponent(caseId)}/report/download`}
+                download
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors shadow-sm"
+              >
+                <Download className="h-4 w-4" />
+                Download Report
+              </a>
+            </div>
           </>
         ) : (
-          <EmptyState 
-            icon={status === AgentStatus.FAILED ? FileWarning : ClipboardList} 
-            title={status === AgentStatus.FAILED ? "Report generation failed" : "No report available"} 
-            description={status === AgentStatus.FAILED ? "The report could not be generated due to an error." : "The investigation report has not been generated yet."} 
+          <EmptyState
+            icon={status === AgentStatus.FAILED ? FileWarning : ClipboardList}
+            title={status === AgentStatus.FAILED ? "Report generation failed" : "No report available"}
+            description={status === AgentStatus.FAILED ? "The report could not be generated due to an error." : "The investigation report has not been generated yet."}
           />
         )}
       </div>

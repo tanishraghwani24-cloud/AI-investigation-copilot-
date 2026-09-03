@@ -904,8 +904,8 @@ class TestBackoffBehavior:
         assert sleep_calls[0] == 1.0  # 1.0 * 2^0
         assert sleep_calls[1] == 2.0  # 1.0 * 2^1
 
-    def test_wait_caps_retry_after_at_backoff_max(self):
-        """_wait must cap the delay at _backoff_max_seconds even with retry_after."""
+    def test_wait_honors_provider_retry_after_beyond_backoff_max(self):
+        """A provider Retry-After must not be shortened by local backoff caps."""
         sleep_calls: list[float] = []
         mock_sdk = MagicMock()
 
@@ -922,7 +922,7 @@ class TestBackoffBehavior:
         client._wait(0, retry_after=100.0)
 
         assert len(sleep_calls) == 1
-        assert sleep_calls[0] == 5.0  # capped at max
+        assert sleep_calls[0] == 100.0
 
     def test_negative_retry_after_clamped_to_zero(self):
         sleep_calls: list[float] = []
@@ -958,6 +958,8 @@ class TestProviderSelection:
             mock_settings.GEMINI_BACKOFF_BASE_SECONDS = 0.5
             mock_settings.GEMINI_BACKOFF_MAX_SECONDS = 8.0
             mock_settings.GEMINI_STRUCTURED_CORRECTION_RETRIES = 1
+            mock_settings.LLM_PRIMARY_PROVIDER = "gemini"
+            mock_settings.LLM_FALLBACK_PROVIDER = "none"
 
             client = get_reasoning_client()
 
@@ -973,6 +975,8 @@ class TestProviderSelection:
             mock_settings.GEMINI_BACKOFF_BASE_SECONDS = 0.5
             mock_settings.GEMINI_BACKOFF_MAX_SECONDS = 8.0
             mock_settings.GEMINI_STRUCTURED_CORRECTION_RETRIES = 1
+            mock_settings.LLM_PRIMARY_PROVIDER = "gemini"
+            mock_settings.LLM_FALLBACK_PROVIDER = "none"
 
             client = get_reasoning_client()
 

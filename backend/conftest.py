@@ -83,10 +83,10 @@ def mock_gemini_boundary(request):
         "app.agents.reasoning_agent.get_reasoning_client",
         return_value=mock_client,
     ), patch(
-        "app.agents.compliance_agent.get_gemini_client",
+        "app.agents.compliance_agent.get_reasoning_client",
         return_value=mock_client,
     ), patch(
-        "app.agents.decision_agent.get_gemini_client",
+        "app.agents.decision_agent.get_reasoning_client",
         return_value=mock_client,
     ):
         yield

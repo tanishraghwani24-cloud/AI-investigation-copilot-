@@ -271,7 +271,7 @@ def mock_gemini():
         "app.agents.reasoning_agent.get_reasoning_client",
         return_value=mock_client,
     ), patch(
-        "app.agents.decision_agent.get_gemini_client",
+        "app.agents.decision_agent.get_reasoning_client",
         return_value=mock_client,
     ):
         yield mock_client

@@ -214,13 +214,14 @@ class TestPersistedStateRoundTrip:
         state = InvestigationState.model_validate(response.json())
         assert state.case_input.alert_reason == "Automated test alert."
 
-    def test_context_intelligence_when_persisted(self) -> None:
+    @pytest.mark.asyncio
+    async def test_context_intelligence_when_persisted(self) -> None:
         """context_intelligence is returned when it exists in persisted state."""
         from app.agents.context_agent import context_agent as run_agent
 
         test_state = _make_test_state()
         # Run context agent to populate context_intelligence
-        agent_result = run_agent(test_state)
+        agent_result = await run_agent(test_state)
         test_state.context_intelligence = agent_result["context_intelligence"]
 
         with patch(

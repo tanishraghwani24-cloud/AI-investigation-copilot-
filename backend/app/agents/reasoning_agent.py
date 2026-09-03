@@ -1,9 +1,8 @@
 """Reasoning Agent — Gemini-powered hypothesis generation.
 
-Takes ``case_input`` and ``context_intelligence`` from the current
-``InvestigationState``, sends the investigation data to Gemini via
-the existing ``GeminiClient``, and produces exactly ONE validated
-``Hypothesis``.
+Uses compact JSON summaries of case data and context intelligence
+to reduce prompt size while preserving all investigation-relevant
+facts needed for evidence-grounded hypothesis generation.
 
 Round 2: Single hypothesis generation.  Multiple / competing
 hypotheses belong to a later round.
@@ -15,6 +14,7 @@ reference + flagged concern), confidence is reduced and the contradiction
 is explicitly acknowledged in the hypothesis description.
 """
 
+import json as _json
 import logging
 import re
 from json import JSONDecodeError
@@ -48,7 +48,11 @@ class GroundingViolationError(Exception):
     pass
 
 
-_EVIDENCE_ID_PATTERN = re.compile(r"\b(?:TXN|DOC|CUST|ACC|ANOM)-[A-Z0-9-]+\b")
+# These are the stable, case-scoped identifiers that can appear in evidence
+# citations.  Keep device IDs here as well: the compact reasoning prompt
+# exposes them and therefore an invented DEV-* identifier must not slip
+# through normalisation merely because "device" is descriptive language.
+_EVIDENCE_ID_PATTERN = re.compile(r"\b(?:TXN|DOC|CUST|ACC|ANOM|DEV)-[A-Z0-9-]+\b")
 _SPARSE_CONFIDENCE_CAP = 0.5
 
 
@@ -96,6 +100,8 @@ def _available_evidence_values(state: InvestigationState) -> set[str]:
             str(value) for value in case_input.customer_profile.model_dump().values()
             if value is not None
         )
+    if case_input.device_info is not None and case_input.device_info.device_id:
+        values.add(case_input.device_info.device_id)
     if case_input.alert_reason:
         values.add(case_input.alert_reason)
     if state.context_intelligence is not None:
@@ -174,32 +180,45 @@ def _normalise_hypotheses(
 
 
 def _check_grounding_violation(hypotheses: list[Hypothesis], state: InvestigationState) -> str | None:
-    """Return an error message if the response violates grounding rules, else None."""
+    """Return an error message if the response violates grounding rules, else None.
+
+    This check rejects hypotheses that reference **data categories the
+    pipeline never supplies** (e.g. biometric scans, KYC documents,
+    passport data).  Generic descriptive words like "device", "channel",
+    "mobile", "document", and "alert" are NOT forbidden because they are
+    natural language the LLM uses when describing facts present in the
+    prompt.  Concrete invented identifiers (TXN-999, DEV-XYZ, ACC-ABC)
+    are separately caught by ``_evidence_is_available`` in
+    ``_normalise_hypotheses``.
+    """
+    # Only categories the pipeline genuinely never provides.
+    # Generic descriptive words (device, channel, mobile, document, alert,
+    # profile, web, history) were removed because they caused false
+    # rejections when Gemini referenced facts actually present in the
+    # prompt.  Concrete ID protection is handled by _evidence_is_available.
     forbidden_terms = [
         "biometric", "face", "facial",
-        "history", "past behavior", "previous transaction", "historical",
-        "profile", "demographic", "kyc",
-        "document", "passport", "id card", "invoice",
-        "alert", "risk indicator",
-        "channel", "mobile", "web", "ip address", "device"
+        "past behavior", "previous transaction",
+        "demographic", "kyc",
+        "passport", "id card", "invoice",
     ]
-    
+
     available_text = " ".join([v.lower() for v in _available_evidence_values(state)])
-    
+
     for hyp in hypotheses:
         # Check title, evidence, and factual part of description
         desc_factual = hyp.description.lower().split("recommend")[0]
         text_to_check = (
-            hyp.title.lower() + " " + 
-            desc_factual + " " + 
+            hyp.title.lower() + " " +
+            desc_factual + " " +
             " ".join(hyp.supporting_evidence).lower() + " " +
             " ".join(hyp.contradicting_evidence).lower()
         )
-        
+
         for term in forbidden_terms:
             if term in text_to_check and term not in available_text:
                 return f"Used unavailable data category '{term}'."
-                
+
     return None
 
 
@@ -335,6 +354,156 @@ def _get_hypotheses(client: object, prompt: str) -> HypothesesResponse:
     return HypothesesResponse.model_validate(response)
 
 
+# ── Compact prompt builders ──────────────────────────────────────────
+
+
+def _build_compact_case(state: InvestigationState) -> str:
+    """Build a compact JSON summary of case data for the Reasoning prompt.
+
+    Preserves all investigation-relevant facts:
+    - alert_reason
+    - Transaction: ID, amount, currency, timestamp, sender/receiver, type,
+      channel, description, location
+    - Customer: ID, name, risk_rating
+    - Merchant: ID, name, category, country, risk_level
+    - Beneficiary: ID, name, country, is_new
+    - Device: ID, type, geolocation, is_known_device
+    - Documents: ID, type, summary, evidence_references
+
+    Excluded (PII / metadata not needed for hypothesis generation):
+    - Customer: email, phone, address, date_of_birth, account_open_date,
+      occupation, nationality
+    - Device: ip_address, os, browser
+    - Documents: file_url, file_name, extracted_text, extracted_entities,
+      extracted_transactions, processing_status, uploaded_at
+    - behavioral_biometrics (entire object)
+    - face_verification (entire object)
+
+    Note: grounding checks (_available_evidence_values, _check_grounding_violation)
+    read from the state object directly — NOT from the prompt text — so removing
+    fields from the prompt does not affect post-processing.
+    """
+    case_input = state.case_input
+    compact: dict = {"alert_reason": case_input.alert_reason}
+
+    # Transactions: keep all fact fields for hypothesis reasoning
+    compact["transactions"] = [
+        {
+            "transaction_id": t.transaction_id,
+            "amount": t.amount,
+            "currency": t.currency,
+            "transaction_type": t.transaction_type,
+            "sender_account": t.sender_account,
+            "receiver_account": t.receiver_account,
+            "timestamp": t.timestamp.isoformat(),
+            "channel": t.channel,
+            **({"description": t.description} if t.description else {}),
+            **({"location": t.location} if t.location else {}),
+        }
+        for t in case_input.transactions
+    ]
+
+    # Customer: identity + risk rating only
+    customer = case_input.customer_profile
+    if customer:
+        compact["customer"] = {
+            "customer_id": customer.customer_id,
+            "name": customer.name,
+            "risk_rating": customer.risk_rating,
+        }
+
+    # Merchant: identity + risk indicators
+    merchant = case_input.merchant_info
+    if merchant:
+        compact["merchant"] = {
+            "merchant_id": merchant.merchant_id,
+            "name": merchant.name,
+            "category": merchant.category,
+            "country": merchant.country,
+            "risk_level": merchant.risk_level.value if merchant.risk_level else None,
+        }
+
+    # Beneficiary: identity + risk indicators
+    beneficiary = case_input.beneficiary_info
+    if beneficiary:
+        compact["beneficiary"] = {
+            "beneficiary_id": beneficiary.beneficiary_id,
+            "name": beneficiary.name,
+            "country": beneficiary.country,
+            "is_new": beneficiary.is_new,
+        }
+
+    # Device: investigative facts only (no browser/OS/IP)
+    device = case_input.device_info
+    if device:
+        compact["device"] = {
+            "device_id": device.device_id,
+            "device_type": device.device_type,
+            "geolocation": device.geolocation,
+            "is_known_device": device.is_known_device,
+        }
+
+    # Documents: IDs and evidence references for traceability
+    if case_input.supporting_documents:
+        compact["supporting_documents"] = [
+            {
+                "document_id": d.document_id,
+                "document_type": d.document_type,
+                **({"summary": d.summary} if d.summary else {}),
+                **({"evidence_references": d.evidence_references} if d.evidence_references else {}),
+            }
+            for d in case_input.supporting_documents
+        ]
+
+    return _json.dumps(compact, indent=2, default=str)
+
+
+def _build_compact_context(state: InvestigationState) -> str:
+    """Build a compact JSON summary of context intelligence for the Reasoning prompt.
+
+    Preserves:
+    - context_summary
+    - key_indicators
+    - risk_score
+    - Anomalies: anomaly_id, anomaly_type, severity, description,
+      related_transactions
+
+    Excluded:
+    - status (agent lifecycle, not prompt-relevant)
+    - historical_baseline (already consumed by Context Agent to generate
+      anomalies/indicators; raw baseline numbers add tokens without aiding
+      hypothesis generation)
+    """
+    context = state.context_intelligence
+    if context is None:
+        return "{}"
+
+    compact: dict = {}
+
+    if context.context_summary:
+        compact["context_summary"] = context.context_summary
+
+    if context.key_indicators:
+        compact["key_indicators"] = context.key_indicators
+
+    if context.risk_score is not None:
+        compact["risk_score"] = context.risk_score
+
+    if context.anomalies:
+        compact["anomalies"] = [
+            {
+                "anomaly_id": a.anomaly_id,
+                "anomaly_type": a.anomaly_type.value,
+                "severity": a.severity.value,
+                "description": a.description,
+                "related_transactions": a.related_transactions,
+            }
+            for a in context.anomalies
+        ]
+
+    return _json.dumps(compact, indent=2, default=str)
+
+
 # ── Prompt construction ──────────────────────────────────────────────
 
 
@@ -343,19 +512,13 @@ from app.prompts.reasoning_prompts import build_reasoning_prompt
 def _build_prompt(state: InvestigationState) -> str:
     """Build a Gemini prompt from the investigation state.
 
-    Includes serialised case data and context intelligence so the
-    model can reason about the specific case rather than generating
-    generic output. Instructs the model to generate at least TWO
-    competing hypotheses based on the provided evidence.
+    Uses compact JSON summaries of case data and context intelligence
+    to reduce prompt size while preserving all transaction IDs, evidence
+    references, and risk indicators needed for grounded hypothesis
+    generation.
     """
-    # Serialise case input
-    case_json = state.case_input.model_dump_json(indent=2)
-
-    # Serialise context intelligence
-    if state.context_intelligence is not None:
-        context_json = state.context_intelligence.model_dump_json(indent=2)
-    else:
-        context_json = "{}"
+    case_json = _build_compact_case(state)
+    context_json = _build_compact_context(state)
 
     return build_reasoning_prompt(case_json, context_json)
 

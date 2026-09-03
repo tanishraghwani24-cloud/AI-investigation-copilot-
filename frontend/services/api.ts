@@ -71,8 +71,9 @@ export function getInvestigationRequest(caseId: string): Promise<InvestigationSt
   );
 }
 
-export function createInvestigationRequest(): Promise<InvestigationState> {
-  return requestJson<InvestigationState>("/investigations", {
+export function createInvestigationRequest(accountId?: string): Promise<InvestigationState> {
+  const url = accountId ? `/investigations?account_id=${encodeURIComponent(accountId)}` : "/investigations";
+  return requestJson<InvestigationState>(url, {
     method: "POST",
   });
 }
@@ -99,5 +100,19 @@ export async function uploadDocumentRequest(
   return requestJson<SupportingDocument>(
     `/investigations/${encodeURIComponent(caseId)}/documents`,
     { method: "POST", body },
+  );
+}
+
+export function getMockBankTransactions(accountId: string): Promise<unknown[]> {
+  return requestJson<unknown[]>(
+    `/mock-bank/accounts/${encodeURIComponent(accountId)}/transactions`,
+    { cache: "no-store" }
+  );
+}
+
+export function getMockBankCustomer(customerId: string): Promise<unknown> {
+  return requestJson<unknown>(
+    `/mock-bank/customers/${encodeURIComponent(customerId)}`,
+    { cache: "no-store" }
   );
 }

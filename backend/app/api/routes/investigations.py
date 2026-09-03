@@ -8,6 +8,7 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query
+from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +24,7 @@ from app.schemas.investigation_state import (
     create_initial_state,
 )
 from app.services.investigation_service import InvestigationService
+from app.services.mock_bank_service import MockBankService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -128,9 +130,65 @@ def _build_investigation_state(
     return create_initial_state(case_id=case_id, case_input=case_input)
 
 
+async def _build_investigation_state_from_db(account_id: str, db: AsyncSession) -> InvestigationState:
+    svc = MockBankService()
+    account = await svc.get_account(db, account_id)
+    customer = None
+    if account:
+        customer = await svc.get_customer(db, account.customer_id)
+
+    if not customer or not account:
+        raise HTTPException(status_code=404, detail="Account or customer not found in Mock Bank")
+
+    customer_profile = CustomerProfile(
+        customer_id=customer.customer_id,
+        name=customer.name or "",
+        email=customer.email,
+        phone=customer.phone,
+        address=customer.address,
+        date_of_birth=customer.date_of_birth,
+        account_open_date=customer.created_at.strftime("%Y-%m-%d") if customer.created_at else None,
+        risk_rating=customer.risk_rating,
+        occupation=customer.occupation,
+        nationality=customer.nationality,
+    )
+
+    transactions_db = await svc.get_account_transactions(db, account_id)
+    alert_txns = transactions_db[-5:] if len(transactions_db) >= 5 else transactions_db
+
+    schema_transactions = []
+    for txn in alert_txns:
+        schema_transactions.append(
+            Transaction(
+                transaction_id=txn.transaction_id,
+                amount=txn.amount,
+                currency=txn.currency,
+                timestamp=txn.timestamp if txn.timestamp else datetime.now(timezone.utc),
+                sender_account=txn.account_id,
+                receiver_account=txn.receiver_account_id,
+                transaction_type=txn.transaction_type,
+                channel=txn.channel,
+                description=txn.description,
+                location=txn.location,
+            )
+        )
+
+    case_input = CaseInput(
+        transactions=schema_transactions,
+        customer_profile=customer_profile,
+        alert_reason="Suspicious activity detected in recent transactions",
+    )
+
+    # Extract the last part of the account ID for the case ID, defaulting to random if missing
+    suffix = account_id[-4:] if len(account_id) >= 4 else "0001"
+    case_id = f"CASE-MOCK-{suffix}"
+    return create_initial_state(case_id=case_id, case_input=case_input)
+
+
 @router.post("/investigations", response_model=InvestigationState)
 async def create_investigation(
     scenario: MockBankScenario = Query(default=MockBankScenario.DEFAULT),
+    account_id: str | None = Query(default=None, description="Mock bank account to investigate"),
     db: AsyncSession = Depends(get_db_session),
 ) -> InvestigationState:
     """Create a new investigation case.
@@ -138,7 +196,11 @@ async def create_investigation(
     Persists a deterministic Mock Bank case input (seed=42). Agent outputs
     are populated only when the investigation is subsequently run.
     """
-    state = _build_investigation_state(_DEFAULT_SEED, scenario=scenario)
+    if account_id:
+        state = await _build_investigation_state_from_db(account_id, db)
+    else:
+        state = _build_investigation_state(_DEFAULT_SEED, scenario=scenario)
+
     return await _investigation_service.create_investigation(
         state.case_id,
         state.case_input,
@@ -253,4 +315,40 @@ async def run_investigation(
         status=AgentStatus.IN_PROGRESS,
         current_stage=state.current_stage,
         message=message,
+    )
+
+
+@router.get("/investigations/{case_id}/report/download")
+async def download_report(
+    case_id: CaseIdPath,
+    db: AsyncSession = Depends(get_db_session),
+) -> Response:
+    """Download the investigation report as a Markdown file.
+
+    Returns the ``detailed_narrative`` produced by the Reporting agent
+    as a downloadable ``text/markdown`` attachment.
+
+    Raises:
+        HTTPException 404: If the case does not exist or its report
+            has not been generated yet.
+    """
+    state = await _investigation_service.get_investigation(case_id, db)
+    if state is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Investigation not found: {case_id}",
+        )
+
+    report = state.investigation_report
+    if report is None or not report.detailed_narrative:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Report not yet generated for investigation: {case_id}",
+        )
+
+    filename = f"{case_id}-report.md"
+    return Response(
+        content=report.detailed_narrative,
+        media_type="text/markdown",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

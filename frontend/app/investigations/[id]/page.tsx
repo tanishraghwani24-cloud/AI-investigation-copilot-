@@ -11,6 +11,7 @@ import { RiskScoreBadge } from "@/components/investigations/RiskScoreBadge";
 import { StatusBadge } from "@/components/investigations/StatusBadge";
 import { CurrentStage } from "@/types";
 import type { InvestigationState } from "@/types";
+import { AutoRefresh } from "@/components/investigations/AutoRefresh";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -59,6 +60,7 @@ export default async function InvestigationDetailPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6">
+      <AutoRefresh currentStage={investigation.current_stage} hasErrors={hasErrors} />
       <div>
         <Link href="/investigations" className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-900">
           <ArrowLeft className="h-4 w-4" /> Back to Investigations
@@ -143,7 +145,7 @@ export default async function InvestigationDetailPage({ params }: PageProps) {
       <ReasoningPanel data={investigation.investigation_reasoning} />
       <CompliancePanel data={investigation.evidence_compliance_validation} />
       <DecisionPanel data={investigation.decision_optimization} />
-      <ReportViewer report={investigation.investigation_report} />
+      <ReportViewer caseId={investigation.case_id} report={investigation.investigation_report} />
       <DocumentUpload investigationId={investigation.case_id} />
 
       {hasErrors && (

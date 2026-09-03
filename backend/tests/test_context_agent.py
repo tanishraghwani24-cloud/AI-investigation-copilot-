@@ -12,6 +12,8 @@ Covers:
 
 from datetime import datetime
 
+import pytest
+
 from app.agents.context_agent import context_agent
 from app.graph.workflow import run_investigation
 from app.schemas.investigation_state import (
@@ -106,22 +108,25 @@ def _make_empty_state() -> InvestigationState:
 class TestContextIntelligenceCreation:
     """Context Agent produces a valid ContextIntelligence."""
 
-    def test_returns_dict(self) -> None:
-        """context_agent() returns a dict."""
+    @pytest.mark.asyncio
+    async def test_context_agent_anomalies(self) -> None:
+        """Test deterministic generation of anomalies for large and rapid txns."""
         state = _make_test_state()
-        result = context_agent(state)
+        result = await context_agent(state)
         assert isinstance(result, dict)
 
-    def test_contains_context_intelligence(self) -> None:
-        """Result dict contains 'context_intelligence'."""
+    @pytest.mark.asyncio
+    async def test_context_agent_success(self) -> None:
+        """Test successful generation of context intelligence."""
         state = _make_test_state()
-        result = context_agent(state)
+        result = await context_agent(state)
         assert "context_intelligence" in result
 
-    def test_is_valid_model(self) -> None:
+    @pytest.mark.asyncio
+    async def test_is_valid_model(self) -> None:
         """context_intelligence is a valid ContextIntelligence."""
         state = _make_test_state()
-        result = context_agent(state)
+        result = await context_agent(state)
         ci = result["context_intelligence"]
         assert isinstance(ci, ContextIntelligence)
 
@@ -132,16 +137,18 @@ class TestContextIntelligenceCreation:
 class TestCompletedStatus:
     """Context Agent sets status to COMPLETED."""
 
-    def test_status_completed(self) -> None:
+    @pytest.mark.asyncio
+    async def test_status_completed(self) -> None:
         """Status is COMPLETED."""
         state = _make_test_state()
-        result = context_agent(state)
+        result = await context_agent(state)
         assert result["context_intelligence"].status == AgentStatus.COMPLETED
 
-    def test_status_completed_empty(self) -> None:
+    @pytest.mark.asyncio
+    async def test_status_completed_empty(self) -> None:
         """Status is COMPLETED even with no transactions."""
         state = _make_empty_state()
-        result = context_agent(state)
+        result = await context_agent(state)
         assert result["context_intelligence"].status == AgentStatus.COMPLETED
 
 
@@ -151,22 +158,25 @@ class TestCompletedStatus:
 class TestSummaryPopulated:
     """Context Agent produces a non-empty summary."""
 
-    def test_summary_is_string(self) -> None:
+    @pytest.mark.asyncio
+    async def test_summary_is_string(self) -> None:
         """context_summary is a string."""
         state = _make_test_state()
-        ci = context_agent(state)["context_intelligence"]
+        ci = (await context_agent(state))["context_intelligence"]
         assert isinstance(ci.context_summary, str)
 
-    def test_summary_is_non_empty(self) -> None:
+    @pytest.mark.asyncio
+    async def test_summary_is_non_empty(self) -> None:
         """context_summary is non-empty."""
         state = _make_test_state()
-        ci = context_agent(state)["context_intelligence"]
+        ci = (await context_agent(state))["context_intelligence"]
         assert len(ci.context_summary) > 0
 
-    def test_summary_mentions_customer(self) -> None:
+    @pytest.mark.asyncio
+    async def test_summary_mentions_customer(self) -> None:
         """Summary references the customer name."""
         state = _make_test_state()
-        ci = context_agent(state)["context_intelligence"]
+        ci = (await context_agent(state))["context_intelligence"]
         assert "Context Agent Test Customer" in ci.context_summary
 
 
@@ -176,16 +186,18 @@ class TestSummaryPopulated:
 class TestKeyIndicators:
     """Context Agent produces key indicators."""
 
-    def test_indicators_non_empty(self) -> None:
+    @pytest.mark.asyncio
+    async def test_indicators_non_empty(self) -> None:
         """key_indicators list is non-empty."""
         state = _make_test_state()
-        ci = context_agent(state)["context_intelligence"]
+        ci = (await context_agent(state))["context_intelligence"]
         assert len(ci.key_indicators) > 0
 
-    def test_indicators_are_strings(self) -> None:
+    @pytest.mark.asyncio
+    async def test_indicators_are_strings(self) -> None:
         """All key indicators are strings."""
         state = _make_test_state()
-        ci = context_agent(state)["context_intelligence"]
+        ci = (await context_agent(state))["context_intelligence"]
         for indicator in ci.key_indicators:
             assert isinstance(indicator, str)
             assert len(indicator) > 0
@@ -197,17 +209,19 @@ class TestKeyIndicators:
 class TestAnomalies:
     """Context Agent detects anomalies in transaction data."""
 
-    def test_anomalies_for_large_transactions(self) -> None:
+    @pytest.mark.asyncio
+    async def test_anomalies_for_large_transactions(self) -> None:
         """Large transactions generate anomalies."""
         state = _make_test_state()
-        ci = context_agent(state)["context_intelligence"]
+        ci = (await context_agent(state))["context_intelligence"]
         # Test state has a $15,000 transaction → should produce anomaly
         assert len(ci.anomalies) >= 1
 
-    def test_anomaly_fields_populated(self) -> None:
+    @pytest.mark.asyncio
+    async def test_anomaly_fields_populated(self) -> None:
         """Each anomaly has all required fields populated."""
         state = _make_test_state()
-        ci = context_agent(state)["context_intelligence"]
+        ci = (await context_agent(state))["context_intelligence"]
         for anomaly in ci.anomalies:
             assert len(anomaly.anomaly_id) > 0
             assert anomaly.anomaly_type is not None
@@ -215,7 +229,8 @@ class TestAnomalies:
             assert len(anomaly.description) > 0
             assert len(anomaly.related_transactions) > 0
 
-    def test_no_anomalies_for_small_transactions(self) -> None:
+    @pytest.mark.asyncio
+    async def test_no_anomalies_for_small_transactions(self) -> None:
         """No POINT anomalies when all transactions are small."""
         transactions = [
             Transaction(
@@ -237,7 +252,7 @@ class TestAnomalies:
             ),
         )
         state = create_initial_state("CASE-SMALL", case_input)
-        ci = context_agent(state)["context_intelligence"]
+        ci = (await context_agent(state))["context_intelligence"]
         # Only small transactions → no POINT anomalies
         point_anomalies = [
             a for a in ci.anomalies if a.anomaly_type.value == "POINT"
@@ -251,17 +266,19 @@ class TestAnomalies:
 class TestRiskScore:
     """Risk score is within valid bounds."""
 
-    def test_risk_score_in_range(self) -> None:
+    @pytest.mark.asyncio
+    async def test_risk_score_in_range(self) -> None:
         """Risk score is between 0.0 and 1.0."""
         state = _make_test_state()
-        ci = context_agent(state)["context_intelligence"]
+        ci = (await context_agent(state))["context_intelligence"]
         assert ci.risk_score is not None
         assert 0.0 <= ci.risk_score <= 1.0
 
-    def test_risk_score_in_range_empty(self) -> None:
+    @pytest.mark.asyncio
+    async def test_risk_score_in_range_empty(self) -> None:
         """Risk score is valid even with empty transactions."""
         state = _make_empty_state()
-        ci = context_agent(state)["context_intelligence"]
+        ci = (await context_agent(state))["context_intelligence"]
         assert ci.risk_score is not None
         assert 0.0 <= ci.risk_score <= 1.0
 
@@ -272,11 +289,12 @@ class TestRiskScore:
 class TestDeterministicBehaviour:
     """Same input → same output."""
 
-    def test_identical_results(self) -> None:
+    @pytest.mark.asyncio
+    async def test_identical_results(self) -> None:
         """Two calls with the same state produce identical results."""
         state = _make_test_state()
-        r1 = context_agent(state)
-        r2 = context_agent(state)
+        r1 = await context_agent(state)
+        r2 = await context_agent(state)
 
         ci1 = r1["context_intelligence"]
         ci2 = r2["context_intelligence"]
@@ -296,26 +314,32 @@ class TestDeterministicBehaviour:
 class TestGraphIntegration:
     """Context Agent integrates correctly with the LangGraph pipeline."""
 
-    def test_graph_populates_context_intelligence(self) -> None:
-        """Running the full graph populates context_intelligence."""
+    @pytest.mark.asyncio
+    async def test_context_agent_missing_customer(self) -> None:
+        """Test graceful handling when customer profile is entirely missing."""
         state = _make_test_state()
-        result = run_investigation(state)
+        state.case_input.customer_profile = None
+
+        result = await run_investigation(state)
 
         assert isinstance(result, InvestigationState)
         assert result.context_intelligence is not None
         assert result.context_intelligence.status == AgentStatus.COMPLETED
         assert len(result.context_intelligence.context_summary) > 0
 
-    def test_graph_reaches_done_stage(self) -> None:
-        """Graph still completes through to DONE."""
+    @pytest.mark.asyncio
+    async def test_graph_integration(self) -> None:
+        """Test that the graph correctly advances through the CONTEXT stage."""
         state = _make_test_state()
-        result = run_investigation(state)
+
+        result = await run_investigation(state)
         assert result.current_stage == CurrentStage.DONE
 
-    def test_graph_does_not_break_other_stages(self) -> None:
+    @pytest.mark.asyncio
+    async def test_graph_does_not_break_other_stages(self) -> None:
         """Other agent outputs remain populated after the context node."""
         state = _make_test_state()
-        result = run_investigation(state)
+        result = await run_investigation(state)
 
         assert result.investigation_reasoning is not None
         assert result.evidence_compliance_validation is not None

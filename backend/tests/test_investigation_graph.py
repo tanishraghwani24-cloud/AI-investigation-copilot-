@@ -7,6 +7,8 @@ pipeline, and validates every agent output section.
 import json
 from datetime import datetime
 
+import pytest
+
 from app.graph.workflow import run_investigation
 from app.schemas import (
     AgentStatus,
@@ -24,7 +26,8 @@ from app.schemas import (
 )
 
 
-def test_full_investigation_pipeline() -> None:
+@pytest.mark.asyncio
+async def test_full_investigation_pipeline() -> None:
     """Run the complete pipeline with a realistic fraud case and validate.
 
     Scenario:
@@ -118,7 +121,7 @@ def test_full_investigation_pipeline() -> None:
     )
 
     # -- Execute pipeline --
-    result: InvestigationState = run_investigation(initial_state)
+    result: InvestigationState = await run_investigation(initial_state)
 
     # -- Pretty-print full state --
     print(json.dumps(result.model_dump(mode="json"), indent=2))

@@ -72,7 +72,8 @@ class TestInvestigationsEndpoint:
         assert state.case_input.customer_profile is not None
         assert len(state.case_input.customer_profile.name) > 0
 
-    def test_has_generated_transactions(self) -> None:
+    @pytest.mark.asyncio
+    async def test_has_generated_transactions(self) -> None:
         """Response includes generated transaction data."""
         response = client.post("/api/investigations")
         state = InvestigationState.model_validate(response.json())

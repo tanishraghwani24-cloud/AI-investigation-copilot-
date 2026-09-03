@@ -262,7 +262,9 @@ class GeminiClient:
 
     def _wait(self, attempt: int, retry_after: float | None = None) -> None:
         delay = retry_after if retry_after is not None else self._backoff_delay(attempt)
-        self._sleep(min(max(0.0, delay), self._backoff_max_seconds))
+        # A provider-supplied Retry-After is authoritative; capping it would
+        # re-send quota-exhausted requests sooner than the provider permits.
+        self._sleep(max(0.0, delay))
 
     def _backoff_delay(self, attempt: int) -> float:
         return min(
@@ -391,11 +393,47 @@ def get_gemini_client() -> GeminiClient:
     )
 
 
+def get_groq_client() -> object:
+    """Create the configured Groq fallback client only when it is needed."""
+    from app.services.groq_client import GroqClient
+
+    kwargs: dict[str, Any] = {
+        "max_retries": int(_setting("GROQ_MAX_RETRIES", 1)),
+        "backoff_base_seconds": float(_setting("GROQ_BACKOFF_BASE_SECONDS", DEFAULT_BACKOFF_BASE_SECONDS)),
+        "backoff_max_seconds": float(_setting("GROQ_BACKOFF_MAX_SECONDS", DEFAULT_BACKOFF_MAX_SECONDS)),
+        "structured_correction_retries": int(_setting("GROQ_STRUCTURED_CORRECTION_RETRIES", DEFAULT_STRUCTURED_CORRECTION_RETRIES)),
+    }
+    timeout = getattr(settings, "GROQ_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS)
+    if isinstance(timeout, (int, float)):
+        kwargs["timeout_seconds"] = float(timeout)
+    return GroqClient(
+        api_key=getattr(settings, "GROQ_API_KEY", ""),
+        model_name=getattr(settings, "GROQ_MODEL", "openai/gpt-oss-20b"),
+        **kwargs,
+    )
+
+
 def get_reasoning_client() -> object:
-    """Return the configured LLM client for the Reasoning Agent only."""
-    provider = str(getattr(settings, "REASONING_LLM_PROVIDER", "gemini")).strip().lower()
+    """Return the primary LLM client, with a one-way optional fallback."""
+    primary_value = getattr(settings, "LLM_PRIMARY_PROVIDER", "gemini")
+    provider = primary_value.strip().lower() if isinstance(primary_value, str) else "gemini"
+    legacy_value = getattr(settings, "REASONING_LLM_PROVIDER", "gemini")
+    legacy_provider = legacy_value.strip().lower() if isinstance(legacy_value, str) else "gemini"
+    # Preserve legacy explicit Ollama deployments while new deployments use
+    # LLM_PRIMARY_PROVIDER / LLM_FALLBACK_PROVIDER.
+    if provider == "gemini" and legacy_provider != "gemini":
+        provider = legacy_provider
     if provider == "gemini":
-        return get_gemini_client()
+        fallback_value = getattr(settings, "LLM_FALLBACK_PROVIDER", "groq")
+        fallback_provider = fallback_value.strip().lower() if isinstance(fallback_value, str) else "groq"
+        if fallback_provider in {"", "none", "disabled"}:
+            return get_gemini_client()
+        if fallback_provider != "groq":
+            raise GeminiClientError(
+                f"Unsupported fallback LLM provider: {fallback_provider!r}. Expected 'groq' or 'none'."
+            )
+        from app.services.llm_client import FallbackClient
+        return FallbackClient(get_gemini_client(), get_groq_client)
     if provider == "ollama":
         from app.services.ollama_client import OllamaClient
 

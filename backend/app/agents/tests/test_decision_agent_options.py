@@ -242,11 +242,11 @@ def _make_test_state() -> InvestigationState:
 
 
 def _patch_gemini(return_value=None):
-    """Return a context-manager that patches get_gemini_client."""
+    """Return a context-manager that patches get_reasoning_client."""
     mock_client = MagicMock()
     mock_client.generate.return_value = return_value or MOCK_RESPONSE
     return patch(
-        "app.agents.decision_agent.get_gemini_client",
+        "app.agents.decision_agent.get_reasoning_client",
         return_value=mock_client,
     )
 
@@ -475,10 +475,10 @@ class TestPromptContent:
         prompt = _build_prompt(state)
         assert "Suspicious wire transfer pattern detected" in prompt
 
-    def test_prompt_contains_context_summary(self) -> None:
+    def test_prompt_contains_context_key_indicators(self) -> None:
         state = _make_test_state()
         prompt = _build_prompt(state)
-        assert "under investigation" in prompt
+        assert "transactions totalling" in prompt
 
     def test_prompt_contains_risk_score(self) -> None:
         state = _make_test_state()
@@ -500,7 +500,7 @@ class TestPromptContent:
         state = _make_test_state()
         state = state.model_copy(update={"context_intelligence": None})
         prompt = _build_prompt(state)
-        assert "CONTEXT INTELLIGENCE" in prompt
+        assert "CASE SUMMARY AND CONTEXT" in prompt
 
     def test_prompt_handles_missing_reasoning(self) -> None:
         """Prompt builds without error when investigation_reasoning is None."""
@@ -540,7 +540,7 @@ class TestRound4Boundary:
     def test_recommended_decision_is_populated(self) -> None:
         """recommended_decision and decision_rationale are set."""
         state = _make_test_state()
-        with patch("app.agents.decision_agent.get_gemini_client") as mock:
+        with patch("app.agents.decision_agent.get_reasoning_client") as mock:
             mock.return_value.generate.return_value = MOCK_RESPONSE
             result = decision_agent(state)
 
@@ -549,7 +549,7 @@ class TestRound4Boundary:
 
     def test_decision_rationale_is_populated(self) -> None:
         state = _make_test_state()
-        with patch("app.agents.decision_agent.get_gemini_client") as mock:
+        with patch("app.agents.decision_agent.get_reasoning_client") as mock:
             mock.return_value.generate.return_value = MOCK_RESPONSE
             result = decision_agent(state)
         assert result["decision_optimization"].decision_rationale is not None

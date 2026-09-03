@@ -70,7 +70,7 @@ def _response(*, references: list[str] | None = None) -> EvidenceComplianceValid
 def _patch(response: EvidenceComplianceValidation):
     client = MagicMock()
     client.generate.return_value = response
-    return patch("app.agents.compliance_agent.get_gemini_client", return_value=client)
+    return patch("app.agents.compliance_agent.get_reasoning_client", return_value=client)
 
 
 def test_basic_compliance_output_and_context_reasoning_input() -> None:

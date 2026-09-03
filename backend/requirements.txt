@@ -5,6 +5,7 @@ python-dotenv
 python-multipart
 langgraph
 google-genai
+groq
 sqlalchemy[asyncio]
 asyncpg
 alembic

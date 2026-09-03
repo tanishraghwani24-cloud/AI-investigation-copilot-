@@ -106,7 +106,7 @@ class TestZeroDocuments:
             ),
             alert_reason="Test alert",
         )
-        result = context_agent(state)
+        result = __import__("asyncio").run(context_agent(state))
         ci = result["context_intelligence"]
         _assert_valid_context(ci)
 
@@ -119,7 +119,7 @@ class TestZeroDocuments:
                 name="Zero Doc Customer",
             ),
         )
-        result = context_agent(state)
+        result = __import__("asyncio").run(context_agent(state))
         ci = result["context_intelligence"]
         assert isinstance(result["context_intelligence"], ContextIntelligence)
         _assert_valid_context(ci)
@@ -135,7 +135,7 @@ class TestZeroDocuments:
             supporting_documents=[],
         )
         state = create_initial_state(case_id="CASE-R5-EMPTY-DOCS", case_input=case_input)
-        result = context_agent(state)
+        result = __import__("asyncio").run(context_agent(state))
         _assert_valid_context(result["context_intelligence"])
 
     def test_no_documents_no_fabricated_doc_evidence(self) -> None:
@@ -147,7 +147,7 @@ class TestZeroDocuments:
                 name="No Fabrication Customer",
             ),
         )
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         doc_indicators = [
             ind for ind in ci.key_indicators
             if "document" in ind.lower() and "supporting" in ind.lower()
@@ -170,7 +170,7 @@ class TestMissingCustomerProfile:
             customer_profile=None,
             include_customer=False,
         )
-        result = context_agent(state)
+        result = __import__("asyncio").run(context_agent(state))
         _assert_valid_context(result["context_intelligence"])
 
     def test_none_profile_valid_context(self) -> None:
@@ -180,7 +180,7 @@ class TestMissingCustomerProfile:
             customer_profile=None,
             include_customer=False,
         )
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         _assert_valid_context(ci)
         # Summary should not contain fabricated customer info
         assert ci.context_summary is not None
@@ -192,7 +192,7 @@ class TestMissingCustomerProfile:
             customer_profile=None,
             include_customer=False,
         )
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         # The summary uses "The customer" as fallback, not a made-up name
         assert "The customer" in ci.context_summary
 
@@ -206,7 +206,7 @@ class TestMissingCustomerProfile:
                 # All Optional fields left at defaults (None)
             ),
         )
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         _assert_valid_context(ci)
         # The customer name should be used in the summary
         assert "Minimal Customer" in ci.context_summary
@@ -221,7 +221,7 @@ class TestMissingCustomerProfile:
                 risk_rating=None,
             ),
         )
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         _assert_valid_context(ci)
         # Risk score uses default 0.3 for unknown rating — still valid
         assert 0.0 <= ci.risk_score <= 1.0
@@ -238,7 +238,7 @@ class TestMissingCustomerProfile:
                 # Other fields left at None defaults
             ),
         )
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         _assert_valid_context(ci)
         assert "Partial Data Customer" in ci.context_summary
 
@@ -259,7 +259,7 @@ class TestPartialMockBankData:
                 risk_rating="LOW",
             ),
         )
-        result = context_agent(state)
+        result = __import__("asyncio").run(context_agent(state))
         _assert_valid_context(result["context_intelligence"])
 
     def test_zero_transactions_valid_stats(self) -> None:
@@ -271,7 +271,7 @@ class TestPartialMockBankData:
                 name="Zero Txn Customer",
             ),
         )
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         _assert_valid_context(ci)
         # Should still report transaction count of 0 in summary
         assert "$0.00" in ci.context_summary or "0 transaction" in ci.context_summary
@@ -285,7 +285,7 @@ class TestPartialMockBankData:
                 name="No Anomaly Customer",
             ),
         )
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         assert ci.anomalies == []
 
     def test_single_transaction_no_rapid_pairs(self) -> None:
@@ -307,7 +307,7 @@ class TestPartialMockBankData:
                 name="Solo Txn Customer",
             ),
         )
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         _assert_valid_context(ci)
         # No rapid pair indicators with a single transaction
         rapid_indicators = [
@@ -329,7 +329,7 @@ class TestPartialMockBankData:
                 name="Partial Timestamp Customer",
             ),
         )
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         _assert_valid_context(ci)
 
     def test_transactions_without_optional_fields(self) -> None:
@@ -353,7 +353,7 @@ class TestPartialMockBankData:
                 name="Bare Txn Customer",
             ),
         )
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         _assert_valid_context(ci)
 
     def test_no_alert_reason(self) -> None:
@@ -366,7 +366,7 @@ class TestPartialMockBankData:
             ),
             alert_reason=None,
         )
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         _assert_valid_context(ci)
         # No "Alert:" indicator should appear
         alert_indicators = [
@@ -388,7 +388,7 @@ class TestCombinedSparseData:
             case_id="CASE-R5-MINIMAL",
             case_input=CaseInput(),
         )
-        result = context_agent(state)
+        result = __import__("asyncio").run(context_agent(state))
         ci = result["context_intelligence"]
         _assert_valid_context(ci)
         # Should have zero anomalies
@@ -404,7 +404,7 @@ class TestCombinedSparseData:
             include_customer=False,
             alert_reason=None,
         )
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         _assert_valid_context(ci)
         # Should still report transaction activity
         assert "transaction" in ci.context_summary.lower()
@@ -419,7 +419,7 @@ class TestCombinedSparseData:
                 risk_rating="HIGH",
             ),
         )
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         _assert_valid_context(ci)
         assert "Profile Only Customer" in ci.context_summary
 
@@ -436,7 +436,7 @@ class TestCombinedSparseData:
             ),
             alert_reason="Suspicious wire activity detected.",
         )
-        ci = context_agent(state)["context_intelligence"]
+        ci = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         _assert_valid_context(ci)
         assert "Full Data Customer" in ci.context_summary
         assert "Suspicious wire activity detected" in ci.context_summary
@@ -450,8 +450,8 @@ class TestCombinedSparseData:
             case_id="CASE-R5-DETERMINISM",
             case_input=CaseInput(),
         )
-        ci1 = context_agent(state)["context_intelligence"]
-        ci2 = context_agent(state)["context_intelligence"]
+        ci1 = __import__("asyncio").run(context_agent(state))["context_intelligence"]
+        ci2 = __import__("asyncio").run(context_agent(state))["context_intelligence"]
         assert ci1.context_summary == ci2.context_summary
         assert ci1.key_indicators == ci2.key_indicators
         assert ci1.risk_score == ci2.risk_score

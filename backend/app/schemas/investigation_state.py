@@ -327,6 +327,18 @@ class CaseInput(BaseModel):
     )
 
 
+class HistoricalBaseline(BaseModel):
+    """Calculated historical baseline of an account's transactional behavior."""
+
+    transaction_count: int = Field(default=0)
+    average_amount: float = Field(default=0.0)
+    maximum_amount: float = Field(default=0.0)
+    common_types: list[str] = Field(default_factory=list)
+    common_channels: list[str] = Field(default_factory=list)
+    common_locations: list[str] = Field(default_factory=list)
+    common_counterparties: list[str] = Field(default_factory=list)
+
+
 class ContextIntelligence(BaseModel):
     """Output of the Context & Evidence Intelligence agent."""
 
@@ -336,6 +348,9 @@ class ContextIntelligence(BaseModel):
     )
     key_indicators: list[str] = Field(
         default_factory=list, description="Important signals extracted from evidence"
+    )
+    historical_baseline: Optional[HistoricalBaseline] = Field(
+        default=None, description="Baseline behavior calculated from historical data"
     )
     anomalies: list[DetectedAnomaly] = Field(default_factory=list)
     risk_score: Optional[float] = Field(

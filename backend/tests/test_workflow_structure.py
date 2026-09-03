@@ -8,16 +8,18 @@ perform content validation — that belongs in test_investigation_graph.py.
 from datetime import datetime
 
 from app.graph.workflow import run_investigation
-from app.schemas import (
+from app.schemas.investigation_state import (
     CaseInput,
+    CurrentStage,
     CustomerProfile,
     InvestigationState,
     Transaction,
     create_initial_state,
 )
+import pytest
 
 
-def test_workflow_structure() -> None:
+def _make_minimal_state() -> InvestigationState:
     """Verify graph compilation, execution, and return type."""
 
     transaction = Transaction(
@@ -40,24 +42,32 @@ def test_workflow_structure() -> None:
         alert_reason="Automated test - workflow structure validation.",
     )
 
-    initial_state = create_initial_state(
+    return create_initial_state(
         case_id="CASE-STRUCT-001",
         case_input=case_input,
     )
 
-    # --- Execute ---
-    result = run_investigation(initial_state)
 
-    # --- Structure assertions only ---
-    assert isinstance(result, InvestigationState), (
-        "run_investigation must return an InvestigationState"
-    )
-    assert result.case_id == "CASE-STRUCT-001"
+@pytest.mark.asyncio
+async def test_workflow_structure() -> None:
+    """Verify that the full graph executes without crashing and returns an InvestigationState."""
+    print("\n[INFO] Starting test_workflow_structure...")
+    initial_state = _make_minimal_state()
 
-    print("[OK] Graph compiled successfully.")
-    print("[OK] Workflow executed without crashing.")
+    result = await run_investigation(initial_state)
+
+    assert isinstance(result, InvestigationState)
+    assert result.current_stage == CurrentStage.DONE
+
+    assert result.context_intelligence is not None
+    assert result.investigation_reasoning is not None
+    assert result.evidence_compliance_validation is not None
+    assert result.decision_optimization is not None
+    assert result.investigation_report is not None
+
     print("[OK] run_investigation() returned an InvestigationState.")
 
 
 if __name__ == "__main__":
-    test_workflow_structure()
+    import asyncio
+    asyncio.run(test_workflow_structure())

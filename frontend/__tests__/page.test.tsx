@@ -6,6 +6,18 @@ import { AgentStatus, CurrentStage } from '@/types';
 // Mock fetch globally
 global.fetch = jest.fn();
 
+// Mock next/navigation
+jest.mock('next/navigation', () => ({
+  useRouter() {
+    return {
+      refresh: jest.fn(),
+      push: jest.fn(),
+      replace: jest.fn(),
+      prefetch: jest.fn(),
+    };
+  }
+}));
+
 const mockInvestigation = {
   case_id: 'CASE-TEST-001',
   current_stage: CurrentStage.CONTEXT,

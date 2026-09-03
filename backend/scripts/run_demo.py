@@ -125,7 +125,10 @@ def print_separator(title: str = "") -> None:
         print(f"{'=' * width}")
 
 
-def main() -> None:
+        print(f"\n{'=' * width}")
+
+
+async def main() -> None:
     """Run the full investigation demo."""
 
     print_separator("AI Investigation Copilot")
@@ -135,8 +138,14 @@ def main() -> None:
     case_id, case_input = build_demo_case()
     initial_state = create_initial_state(case_id=case_id, case_input=case_input)
 
-    # Execute pipeline
-    result = run_investigation(initial_state)
+    # 4. Run the pipeline
+    print("\nRunning AI Investigation Pipeline...")
+    start_time = time.time()
+
+    # Note: run_investigation is an async function
+    result = await run_investigation(initial_state)
+
+    duration = time.time() - start_time
 
     # Agent status checks
     agents = [
@@ -206,4 +215,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+    asyncio.run(main())

@@ -15,7 +15,7 @@ from app.schemas.investigation_state import (
 )
 
 
-def context_node(state: Any) -> dict:
+async def context_node(state: Any) -> dict:
     """Execute the Context & Evidence Intelligence step.
 
     Delegates to context_agent() for context intelligence generation,
@@ -28,7 +28,7 @@ def context_node(state: Any) -> dict:
         investigation_state = state
 
     # Delegate to the Context Agent
-    agent_result = context_agent(investigation_state)
+    agent_result = await context_agent(investigation_state)
 
     # Merge agent result with stage advancement
     agent_result["current_stage"] = CurrentStage.CONTEXT

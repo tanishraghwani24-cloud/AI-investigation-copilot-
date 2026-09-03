@@ -176,6 +176,11 @@ class InvestigationService:
         state.context_intelligence = ContextIntelligence(
             status=AgentStatus.IN_PROGRESS,
         )
+        state.investigation_reasoning = None
+        state.evidence_compliance_validation = None
+        state.decision_optimization = None
+        state.investigation_report = None
+        state.errors = []
         state.current_stage = CurrentStage.CONTEXT
         state.updated_at = datetime.now(timezone.utc)
         await self._repo.update_state(
