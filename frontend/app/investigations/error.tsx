@@ -18,8 +18,8 @@ export default function InvestigationsError({
   return (
     <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
       <AlertTriangle className="mb-4 h-12 w-12 text-amber-500" />
-      <h2 className="text-xl font-bold text-gray-900">Unable to load investigation</h2>
-      <p className="mt-2 text-sm text-gray-500 max-w-md">
+      <h2 className="text-xl font-bold text-gray-900 dark:text-white">Unable to load investigation</h2>
+      <p className="mt-2 text-sm text-gray-500 max-w-md dark:text-gray-400">
         {error.message || "An unexpected error occurred while fetching the investigation data."}
       </p>
       <div className="mt-6 flex flex-wrap gap-4 items-center justify-center">
@@ -31,7 +31,7 @@ export default function InvestigationsError({
         </button>
         <Link
           href="/investigations"
-          className="flex items-center gap-2 rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          className="flex items-center gap-2 rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800/60"
         >
           <ArrowLeft className="h-4 w-4" /> Back to List
         </Link>

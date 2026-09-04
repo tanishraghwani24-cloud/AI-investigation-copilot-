@@ -52,13 +52,13 @@ export function DocumentUpload({ investigationId, onUploaded }: DocumentUploadPr
   };
 
   return (
-    <section className="rounded-xl border border-gray-200 bg-white shadow-sm" aria-labelledby="document-upload-title">
-      <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-4">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 text-gray-600"><Upload className="h-5 w-5" /></div>
-        <h3 id="document-upload-title" className="text-base font-semibold text-gray-900">Upload supporting document</h3>
+    <section className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900" aria-labelledby="document-upload-title">
+      <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-4 dark:border-gray-800">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"><Upload className="h-5 w-5" /></div>
+        <h3 id="document-upload-title" className="text-base font-semibold text-gray-900 dark:text-white">Upload supporting document</h3>
       </div>
       <div className="space-y-3 px-6 py-5">
-        <input ref={inputRef} type="file" onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)} disabled={uploading} className="block w-full text-sm text-gray-600" />
+        <input ref={inputRef} type="file" onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)} disabled={uploading} className="block w-full text-sm text-gray-600 dark:text-gray-300" />
         <button type="button" onClick={upload} disabled={uploading || !selectedFile} className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
           {uploading ? "Uploading…" : "Upload document"}
         </button>

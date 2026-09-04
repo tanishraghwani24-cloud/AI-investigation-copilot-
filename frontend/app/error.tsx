@@ -15,10 +15,10 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <div className="flex min-h-[400px] flex-col items-center justify-center rounded-xl border border-red-200 bg-red-50 p-8 text-center">
+    <div className="flex min-h-[400px] flex-col items-center justify-center rounded-xl border border-red-200 bg-red-50 p-8 text-center dark:border-red-900 dark:bg-red-900/30">
       <AlertTriangle className="mb-4 h-12 w-12 text-red-500" />
-      <h2 className="text-lg font-semibold text-red-900">Something went wrong!</h2>
-      <p className="mt-2 text-sm text-red-700 max-w-md">
+      <h2 className="text-lg font-semibold text-red-900 dark:text-red-100">Something went wrong!</h2>
+      <p className="mt-2 text-sm text-red-700 max-w-md dark:text-red-300">
         {error.message || "An unexpected error occurred while loading this page."}
       </p>
       <button

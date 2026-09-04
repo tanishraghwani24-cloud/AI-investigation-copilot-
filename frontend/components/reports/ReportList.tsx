@@ -63,15 +63,15 @@ export function ReportList() {
   }, [loadReports]);
 
   if (loading) {
-    return <p className="text-sm text-gray-500">Loading completed investigation reports…</p>;
+    return <p className="text-sm text-gray-500 dark:text-gray-400">Loading completed investigation reports…</p>;
   }
 
   if (error) {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 px-6 py-8 text-center">
-        <h1 className="text-lg font-semibold text-red-800">Unable to load reports</h1>
-        <p className="mt-2 text-sm text-red-700">{error}</p>
-        <button type="button" onClick={() => void loadReports()} className="mt-4 rounded-md bg-red-700 px-3 py-2 text-sm font-medium text-white hover:bg-red-800">Retry</button>
+      <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-8 text-center sm:px-6 dark:border-red-900 dark:bg-red-950/40">
+        <h1 className="text-lg font-semibold text-red-800 dark:text-red-200">Unable to load reports</h1>
+        <p className="mt-2 text-sm text-red-700 dark:text-red-300">{error}</p>
+        <button type="button" onClick={() => void loadReports()} className="mt-4 rounded-md bg-red-700 px-3 py-2 text-sm font-medium text-white hover:bg-red-800 dark:bg-red-600 dark:hover:bg-red-500">Retry</button>
       </div>
     );
   }
@@ -79,33 +79,33 @@ export function ReportList() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
-        <p className="mt-1 text-sm text-gray-500">Completed investigation reports update automatically.</p>
-        {downloadError && <p role="alert" className="mt-2 text-sm text-red-600">{downloadError}</p>}
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Reports</h1>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Completed investigation reports update automatically.</p>
+        {downloadError && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">{downloadError}</p>}
       </div>
 
       {reports.length === 0 ? (
-        <div className="rounded-xl border border-gray-200 bg-white px-6 py-12 text-center shadow-sm">
-          <FileText className="mx-auto h-8 w-8 text-gray-400" />
-          <h2 className="mt-3 text-sm font-semibold text-gray-900">No completed reports yet</h2>
-          <p className="mt-1 text-sm text-gray-500">Reports appear here when an investigation reaches DONE.</p>
+        <div className="rounded-xl border border-gray-200 bg-white px-4 py-12 text-center shadow-sm sm:px-6 dark:border-gray-800 dark:bg-gray-900">
+          <FileText className="mx-auto h-8 w-8 text-gray-400 dark:text-gray-500" />
+          <h2 className="mt-3 text-sm font-semibold text-gray-900 dark:text-gray-100">No completed reports yet</h2>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Reports appear here when an investigation reaches DONE.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
-          <table className="w-full text-left text-sm">
-            <thead><tr className="border-b border-gray-200 bg-gray-50/80">
+        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+          <table className="w-full min-w-[56rem] text-left text-sm">
+            <thead><tr className="border-b border-gray-200 bg-gray-50/80 dark:border-gray-800 dark:bg-gray-800/50">
               <th className="px-6 py-3 font-semibold text-gray-600">Case ID</th><th className="px-6 py-3 font-semibold text-gray-600">Customer</th><th className="px-6 py-3 font-semibold text-gray-600">Risk score</th><th className="px-6 py-3 font-semibold text-gray-600">Recommendation</th><th className="px-6 py-3 font-semibold text-gray-600">Created</th><th className="px-6 py-3 font-semibold text-gray-600">Updated</th><th className="px-6 py-3 text-right font-semibold text-gray-600"><span className="sr-only">Download</span></th>
             </tr></thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
               {reports.map((report) => (
-                <tr key={report.caseId} className="transition-colors hover:bg-blue-50/50">
-                  <td className="px-6 py-4 font-medium"><Link href={`/investigations/${encodeURIComponent(report.caseId)}`} className="text-blue-600 hover:text-blue-800">{report.caseId}</Link></td>
-                  <td className="px-6 py-4 text-gray-900">{report.customerName}</td>
+                <tr key={report.caseId} className="transition-colors hover:bg-blue-50/50 dark:hover:bg-blue-900/20">
+                  <td className="px-6 py-4 font-medium whitespace-nowrap"><Link href={`/investigations/${encodeURIComponent(report.caseId)}`} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">{report.caseId}</Link></td>
+                  <td className="px-6 py-4 text-gray-900 dark:text-gray-100">{report.customerName}</td>
                   <td className="px-6 py-4"><RiskScoreBadge score={report.riskScore} /></td>
-                  <td className="px-6 py-4 text-gray-700">{report.recommendation ?? "No recommendation"}</td>
-                  <td className="px-6 py-4 text-gray-500">{formatDate(report.createdAt)}</td>
-                  <td className="px-6 py-4 text-gray-500">{formatDate(report.updatedAt)}</td>
-                  <td className="px-6 py-4 text-right"><button type="button" onClick={() => void downloadReport(report.caseId)} disabled={downloadingCaseId === report.caseId} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"><Download className="h-4 w-4" />{downloadingCaseId === report.caseId ? "Downloading…" : "Download"}</button></td>
+                  <td className="px-6 py-4 text-gray-700 dark:text-gray-300">{report.recommendation ?? "No recommendation"}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400">{formatDate(report.createdAt)}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400">{formatDate(report.updatedAt)}</td>
+                  <td className="px-6 py-4 text-right"><button type="button" onClick={() => void downloadReport(report.caseId)} disabled={downloadingCaseId === report.caseId} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium whitespace-nowrap text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-500 dark:hover:bg-blue-400 dark:focus:ring-offset-gray-900"><Download className="h-4 w-4" />{downloadingCaseId === report.caseId ? "Downloading…" : "Download"}</button></td>
                 </tr>
               ))}
             </tbody>

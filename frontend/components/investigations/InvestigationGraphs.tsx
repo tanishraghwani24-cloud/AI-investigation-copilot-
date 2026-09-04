@@ -31,14 +31,14 @@ export function InvestigationGraphs({ graphs }: InvestigationGraphsProps) {
 
   return (
     <section
-      className="rounded-xl border border-gray-200 bg-white shadow-sm"
+      className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900"
       aria-labelledby="investigation-graphs-title"
     >
-      <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-4">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 text-gray-600">
+      <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-4 dark:border-gray-800">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
           <Network className="h-5 w-5" />
         </div>
-        <h3 id="investigation-graphs-title" className="text-base font-semibold text-gray-900">
+        <h3 id="investigation-graphs-title" className="text-base font-semibold text-gray-900 dark:text-white">
           Investigation Graphs
         </h3>
       </div>
@@ -51,17 +51,17 @@ export function InvestigationGraphs({ graphs }: InvestigationGraphsProps) {
           emptyMessage="No relationship data available for this investigation."
         />
 
-        <div className="border-t border-gray-100 pt-6">
+        <div className="border-t border-gray-100 pt-6 dark:border-gray-800">
           <InvestigationTimeline events={graphs?.investigation_timeline} />
         </div>
 
         {hasSecondaryGraphs && (
           <details
-            className="group border-t border-gray-100 pt-6"
+            className="group border-t border-gray-100 pt-6 dark:border-gray-800"
             open={secondaryOpen}
             onToggle={(event) => setSecondaryOpen(event.currentTarget.open)}
           >
-            <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-gray-900">
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 dark:text-gray-300">
               <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
               Reasoning &amp; decision graphs
             </summary>

@@ -48,30 +48,30 @@ const STATUS_CONFIG: Record<
   pending: {
     label: "Pending",
     dot: "bg-gray-300",
-    ring: "border-gray-200 bg-white",
+    ring: "border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900",
     icon: Clock,
-    iconClass: "text-gray-400",
+    iconClass: "text-gray-400 dark:text-gray-500",
   },
   running: {
     label: "Running",
     dot: "bg-blue-500 animate-pulse",
-    ring: "border-blue-300 bg-blue-50",
+    ring: "border-blue-300 bg-blue-50 dark:bg-blue-900/30",
     icon: Loader2,
-    iconClass: "text-blue-600 animate-spin",
+    iconClass: "text-blue-600 animate-spin dark:text-blue-400",
   },
   completed: {
     label: "Completed",
     dot: "bg-emerald-500",
-    ring: "border-emerald-300 bg-emerald-50",
+    ring: "border-emerald-300 bg-emerald-50 dark:bg-emerald-900/30",
     icon: CheckCircle2,
     iconClass: "text-emerald-600",
   },
   failed: {
     label: "Failed",
     dot: "bg-red-500",
-    ring: "border-red-300 bg-red-50",
+    ring: "border-red-300 bg-red-50 dark:bg-red-900/30",
     icon: XCircle,
-    iconClass: "text-red-600",
+    iconClass: "text-red-600 dark:text-red-400",
   },
 };
 
@@ -171,17 +171,17 @@ function StageNode({
           config.ring,
         )}
       >
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-gray-500 shadow-sm">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-gray-500 shadow-sm dark:bg-gray-900 dark:text-gray-400">
           <StageIcon className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-gray-900">{stage.label}</p>
+          <p className="truncate text-sm font-medium text-gray-900 dark:text-white">{stage.label}</p>
           <div className="mt-0.5 flex items-center gap-1.5">
             <StatusIcon className={cn("h-3.5 w-3.5", config.iconClass)} />
-            <span className="text-xs font-medium text-gray-600">{config.label}</span>
+            <span className="text-xs font-medium text-gray-600 dark:text-gray-300">{config.label}</span>
           </div>
           {result.status === "failed" && result.errorMessage && (
-            <p className="mt-1 text-xs text-red-700" title={result.errorMessage}>
+            <p className="mt-1 text-xs text-red-700 dark:text-red-300" title={result.errorMessage}>
               {result.errorMessage}
             </p>
           )}
@@ -195,7 +195,7 @@ function StageNode({
             <div
               className={cn(
                 "h-full w-px transition-colors duration-300",
-                result.status === "failed" ? "bg-red-200" : result.status === "completed" ? "bg-emerald-300" : "bg-gray-200",
+                result.status === "failed" ? "bg-red-200" : result.status === "completed" ? "bg-emerald-300" : "bg-gray-200 dark:bg-gray-700",
               )}
             />
           </div>
@@ -204,7 +204,7 @@ function StageNode({
             <div
               className={cn(
                 "h-px w-4 transition-colors duration-300 lg:w-6",
-                result.status === "completed" ? "bg-emerald-300" : "bg-gray-200",
+                result.status === "completed" ? "bg-emerald-300" : "bg-gray-200 dark:bg-gray-700",
               )}
             />
           </div>
@@ -223,15 +223,15 @@ export function InvestigationPipeline({ investigation }: InvestigationPipelinePr
 
   return (
     <section
-      className="rounded-xl border border-gray-200 bg-white shadow-sm"
+      className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900"
       aria-labelledby="investigation-pipeline-title"
     >
-      <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+      <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-gray-800">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 text-gray-600">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
             <AlertTriangle className="h-5 w-5" />
           </div>
-          <h3 id="investigation-pipeline-title" className="text-base font-semibold text-gray-900">
+          <h3 id="investigation-pipeline-title" className="text-base font-semibold text-gray-900 dark:text-white">
             Investigation Execution
           </h3>
         </div>
@@ -239,7 +239,7 @@ export function InvestigationPipeline({ investigation }: InvestigationPipelinePr
           {(Object.keys(STATUS_CONFIG) as VisualStatus[]).map((key) => (
             <div key={key} className="flex items-center gap-1.5">
               <span className={cn("h-2 w-2 rounded-full", STATUS_CONFIG[key].dot)} />
-              <span className="text-xs text-gray-500">{STATUS_CONFIG[key].label}</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">{STATUS_CONFIG[key].label}</span>
             </div>
           ))}
         </div>

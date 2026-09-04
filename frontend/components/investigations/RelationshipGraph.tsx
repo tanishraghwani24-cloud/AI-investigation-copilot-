@@ -67,8 +67,8 @@ export function RelationshipGraph({
   return (
     <div>
       <div className="mb-3 flex items-center gap-2">
-        <Icon className="h-4 w-4 text-gray-500" />
-        <h4 className="text-sm font-semibold text-gray-800">{title}</h4>
+        <Icon className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+        <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-100">{title}</h4>
       </div>
 
       {nodes.length === 0 ? (
@@ -210,11 +210,11 @@ export function RelationshipGraph({
                 </h5>
                 <ul className="mt-1 space-y-1">
                   {edges.map((edge, index) => (
-                    <li key={`${edge.source}-${edge.target}-${index}`} className="text-xs text-gray-600">
-                      <span className="font-medium text-gray-800">{edge.source}</span>
+                    <li key={`${edge.source}-${edge.target}-${index}`} className="text-xs text-gray-600 dark:text-gray-300">
+                      <span className="font-medium text-gray-800 dark:text-gray-100">{edge.source}</span>
                       {" → "}
-                      <span className="font-medium text-gray-800">{edge.target}</span>
-                      {edge.relationship && <span className="text-gray-400"> ({edge.relationship})</span>}
+                      <span className="font-medium text-gray-800 dark:text-gray-100">{edge.target}</span>
+                      {edge.relationship && <span className="text-gray-400 dark:text-gray-500"> ({edge.relationship})</span>}
                     </li>
                   ))}
                 </ul>

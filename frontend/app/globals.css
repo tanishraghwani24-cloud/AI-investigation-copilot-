@@ -81,6 +81,14 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* Magnifier hero title: ink, the surface painted inside the lens, and the
+     lens hardware. Flipped under .dark so the headline stays legible. */
+  --lens-ink: #0a0a0a;
+  --lens-surface: #f5f5f3;
+  --lens-rim: #1a1a1a;
+  --lens-handle-from: #3a3a3a;
+  --lens-handle-to: #111111;
 }
 
 .dark {
@@ -115,6 +123,12 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  --lens-ink: #f3f4f6;
+  --lens-surface: #030712;
+  --lens-rim: #d1d5db;
+  --lens-handle-from: #9ca3af;
+  --lens-handle-to: #4b5563;
 }
 
 @layer base {

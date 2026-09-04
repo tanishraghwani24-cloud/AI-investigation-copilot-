@@ -103,7 +103,7 @@ function ItemText({ text }: { text: string }) {
   if (!labelled) return <>{text}</>;
   return (
     <>
-      <span className="font-medium text-gray-800">{labelled[1]}:</span>{" "}
+      <span className="font-medium text-gray-800 dark:text-gray-100">{labelled[1]}:</span>{" "}
       {labelled[2]}
     </>
   );
@@ -114,8 +114,8 @@ function NarrativeList({ items, depth = 0 }: { items: NarrativeListItem[]; depth
     <ul
       className={
         depth === 0
-          ? "list-disc space-y-1.5 pl-5 text-sm text-gray-600 marker:text-gray-400"
-          : "mt-1.5 list-[circle] space-y-1 pl-5 text-sm text-gray-600 marker:text-gray-300"
+          ? "list-disc space-y-1.5 pl-5 text-sm text-gray-600 marker:text-gray-400 dark:text-gray-300"
+          : "mt-1.5 list-[circle] space-y-1 pl-5 text-sm text-gray-600 marker:text-gray-300 dark:text-gray-300"
       }
     >
       {items.map((item, index) => (
@@ -141,7 +141,7 @@ export function StructuredNarrative({ narrative }: { narrative: string }) {
           return (
             <h5
               key={key}
-              className="border-t border-gray-100 pt-4 text-xs font-semibold uppercase tracking-wider text-gray-500 first:border-t-0 first:pt-0"
+              className="border-t border-gray-100 pt-4 text-xs font-semibold uppercase tracking-wider text-gray-500 first:border-t-0 first:pt-0 dark:border-gray-800 dark:text-gray-400"
             >
               {block.text}
             </h5>
@@ -155,7 +155,7 @@ export function StructuredNarrative({ narrative }: { narrative: string }) {
           );
         }
         return (
-          <p key={key} className="text-sm leading-relaxed text-gray-600">
+          <p key={key} className="text-sm leading-relaxed text-gray-600 dark:text-gray-300">
             {block.text}
           </p>
         );
