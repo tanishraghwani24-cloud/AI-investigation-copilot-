@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, JSON, String, text
+from sqlalchemy import DateTime, ForeignKey, JSON, String, Uuid, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -33,6 +33,14 @@ class InvestigationCase(Base):
     )
     state_json: Mapped[dict | None] = mapped_column(
         JSON, nullable=True,
+    )
+    # The investigator who triggered this case. Historical and permanent —
+    # distinct from live presence, so a completed case still shows who handled
+    # it. Nullable: investigations predating investigator accounts have none.
+    investigator_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("investigator_profiles.user_id", ondelete="SET NULL"),
+        nullable=True, index=True,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

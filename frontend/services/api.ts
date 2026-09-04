@@ -42,14 +42,44 @@ async function responseMessage(response: Response): Promise<string> {
   return response.statusText || `Request failed with status ${response.status}`;
 }
 
+/**
+ * Supplies the signed-in investigator's Supabase access token.
+ *
+ * Registered by InvestigatorProvider so this module never needs to know how
+ * sessions are stored. The token identifies *who* is acting; the shared secret
+ * below authenticates the deployment. They are separate concerns and both are
+ * attached where applicable.
+ */
+type AccessTokenProvider = () => Promise<string | null>;
+
+let accessTokenProvider: AccessTokenProvider | null = null;
+
+export function setAccessTokenProvider(provider: AccessTokenProvider | null): void {
+  accessTokenProvider = provider;
+}
+
 async function requestJson<T>(
   path: string,
   init?: RequestInit,
+  /** Officer token for Server Components, which have no browser session. */
+  accessToken?: string | null,
 ): Promise<T> {
   const headers: Record<string, string> = {
     Accept: "application/json",
     ...(init?.headers as Record<string, string> | undefined),
   };
+  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+  // Investigator identity travels as a bearer token the backend verifies
+  // against Supabase's public keys. A caller cannot name an investigator any
+  // other way, so this is the only route by which actions become attributable.
+  if (!isServer && accessTokenProvider) {
+    try {
+      const token = await accessTokenProvider();
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+    } catch {
+      // A missing session must not break unauthenticated reads.
+    }
+  }
   // Only attach the secret on the server: process.env.API_SHARED_SECRET is
   // never inlined into the client bundle (only NEXT_PUBLIC_* vars are), so
   // this is always undefined in the browser — the header is simply omitted
@@ -85,10 +115,15 @@ export function listInvestigationsRequest(): Promise<InvestigationState[]> {
   });
 }
 
-export function getInvestigationRequest(caseId: string): Promise<InvestigationState> {
+export function getInvestigationRequest(
+  caseId: string,
+  /** Supplied by Server Components, which have no browser session to read. */
+  accessToken?: string | null,
+): Promise<InvestigationState> {
   return requestJson<InvestigationState>(
     `/investigations/${encodeURIComponent(caseId)}`,
     { cache: "no-store" },
+    accessToken,
   );
 }
 
@@ -180,4 +215,46 @@ export function investigateAlertRequest(alertId: string): Promise<InvestigateAle
     `/alerts/${encodeURIComponent(alertId)}/investigate`,
     { method: "POST" },
   );
+}
+
+
+/** The investigator identity the UI renders as an avatar. */
+export interface Investigator {
+  user_id: string;
+  full_name: string;
+  email?: string | null;
+  initial: string;
+  officer_id?: string | null;
+  role?: string | null;
+}
+
+/** Investigators currently working a given case. */
+export interface PresenceEntry {
+  case_id: string;
+  investigators: Investigator[];
+}
+
+/** The investigator who handled a case (historical). */
+export interface CaseAssignment {
+  case_id: string;
+  investigator: Investigator | null;
+}
+
+export function getMeRequest(): Promise<Investigator> {
+  return requestJson<Investigator>("/investigators/me");
+}
+
+export function listPresenceRequest(): Promise<PresenceEntry[]> {
+  return requestJson<PresenceEntry[]>("/presence");
+}
+
+export function heartbeatPresenceRequest(caseId: string): Promise<PresenceEntry> {
+  return requestJson<PresenceEntry>(
+    `/presence/${encodeURIComponent(caseId)}/heartbeat`,
+    { method: "POST" },
+  );
+}
+
+export function listAssignmentsRequest(): Promise<CaseAssignment[]> {
+  return requestJson<CaseAssignment[]>("/investigators/assignments");
 }

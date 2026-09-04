@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.investigator_auth import Investigator, get_optional_investigator
 from app.db.session import get_db_session
 from app.models.mock_bank import MockBankAlert
 from app.schemas.investigation_state import (
@@ -25,6 +26,7 @@ from app.schemas.investigation_state import (
     Transaction,
 )
 from app.services.alert_simulator import AlertSimulator
+from app.services.investigator_service import InvestigatorService
 from app.services.mock_bank_service import MockBankService
 
 logger = logging.getLogger(__name__)
@@ -33,6 +35,7 @@ router = APIRouter(tags=["alerts"])
 
 _mock_bank = MockBankService()
 _simulator = AlertSimulator()
+_investigators = InvestigatorService()
 
 AlertIdPath = Annotated[str, Path(min_length=1, max_length=64, description="Alert identifier")]
 
@@ -215,6 +218,7 @@ async def _build_case_input_from_alert(
 async def investigate_alert(
     alert_id: AlertIdPath,
     background_tasks: BackgroundTasks,
+    investigator: Investigator | None = Depends(get_optional_investigator),
     db: AsyncSession = Depends(get_db_session),
 ) -> InvestigateAlertResponse:
     """Escalate one alert into its own investigation and start the pipeline.
@@ -222,6 +226,11 @@ async def investigate_alert(
     The case ID is derived from the alert ID, so escalating the same alert twice
     cannot produce two investigations: the second call finds the alert already
     carries a case and returns it untouched.
+
+    When a signed-in investigator triggers this, the case is attributed to them
+    and they are marked as actively working it. Identity comes only from the
+    verified token — an unauthenticated caller creates an unassigned case
+    exactly as before rather than being able to name someone else.
     """
     # Imported here so the investigations module stays the single owner of the
     # run/persist plumbing rather than this route duplicating it.
@@ -238,7 +247,26 @@ async def investigate_alert(
         raise HTTPException(status_code=404, detail=f"Alert not found: {alert_id}")
 
     if alert.case_id:
-        # Already escalated — return the existing case rather than a duplicate.
+        # Already escalated. If a *different* officer is still actively working
+        # it, refuse rather than quietly handing over the case — two officers
+        # must not both believe they own an in-flight investigation. Once the
+        # run finishes and presence is released, this reverts to the ordinary
+        # idempotent response so the case can still be reopened or viewed.
+        active = (await _investigators.active_presence(db, [alert.case_id])).get(
+            alert.case_id, []
+        )
+        holder = next(
+            (
+                profile for profile in active
+                if investigator is None or str(profile.user_id) != investigator.user_id
+            ),
+            None,
+        )
+        if holder is not None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"{holder.full_name} is already investigating this alert.",
+            )
         return InvestigateAlertResponse(
             alert_id=alert.alert_id, case_id=alert.case_id, created=False,
         )
@@ -256,6 +284,10 @@ async def investigate_alert(
 
     alert.case_id = case_id
     alert.status = "INVESTIGATING"
+    if investigator is not None:
+        await _investigators.upsert_profile(db, investigator)
+        await _investigators.assign_case(db, case_id, investigator)
+        await _investigators.heartbeat(db, case_id, investigator)
     await db.commit()
 
     started = await _investigation_service.start_investigation(case_id, db)

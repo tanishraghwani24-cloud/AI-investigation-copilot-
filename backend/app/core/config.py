@@ -56,6 +56,28 @@ class Settings(BaseSettings):
     # deterministic offline stand-in so a demo cannot be stalled by provider
     # quota exhaustion. It is opt-in and must stay false in production: when
     # false the Gemini -> Groq path below is used exactly as before.
+    # --- Investigator identity (Supabase Auth) ---
+    # Supabase signs user tokens with ES256 and publishes the public keys, so
+    # the backend verifies sessions with no shared secret and no service-role
+    # key. Only the project URL is needed here.
+    SUPABASE_URL: str = ""
+    SUPABASE_JWKS_URL: str = ""
+    SUPABASE_JWT_AUDIENCE: str = "authenticated"
+    # Declared so a .env containing it still validates (Settings forbids unknown
+    # keys). Nothing in the request path reads this: session verification uses
+    # the project's public JWKS. It exists only for out-of-band administration
+    # such as resetting a demo officer's password, and must never be sent to a
+    # browser or given a NEXT_PUBLIC_ prefix.
+    SUPABASE_SERVICE_ROLE_KEY: str = ""
+    # How long a presence heartbeat counts as "currently working on this case".
+    CASE_PRESENCE_TTL_SECONDS: int = 90
+    # A demo investigation finishes in a few seconds, which is too fast for a
+    # second officer's Officer Box to poll and observe the "in progress" state.
+    # This holds the case in progress a little longer so collaboration is
+    # actually visible. Applied ONLY when DEMO_MODE is on, and it delays the
+    # start of the run rather than touching the pipeline, so results are
+    # byte-for-byte identical. Zero disables it.
+    DEMO_INVESTIGATION_DELAY_SECONDS: float = 12.0
     DEMO_MODE: bool = False
     # Mock Bank incoming-activity simulator. Generates new transactions and the
     # alerts they trigger so the Officer Inbox behaves like a live queue.

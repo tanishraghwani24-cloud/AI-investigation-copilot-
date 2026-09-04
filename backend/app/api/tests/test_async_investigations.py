@@ -99,7 +99,10 @@ async def test_background_helper_runs_existing_service_pipeline() -> None:
         await investigation_routes._run_investigation_background("CASE-BACKGROUND-001")
 
     run.assert_awaited_once_with("CASE-BACKGROUND-001", session)
-    session.commit.assert_awaited_once()
+    # Two commits: the pipeline run, then releasing live case presence. The
+    # release deliberately uses its own session so a rolled-back run cannot
+    # stop the case from being marked no-longer-in-progress.
+    assert session.commit.await_count == 2
     session.rollback.assert_not_awaited()
 
 

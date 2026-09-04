@@ -3,6 +3,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { listInvestigations } from "@/services/investigationService";
+import { listAssignmentsRequest } from "@/services/api";
+import { useInvestigator } from "@/components/auth/InvestigatorProvider";
+import { InvestigatorAvatar } from "@/components/investigators/InvestigatorAvatar";
+import type { Investigator } from "@/types";
 import { StatusBadge } from "@/components/investigations/StatusBadge";
 import { RiskScoreBadge } from "@/components/investigations/RiskScoreBadge";
 import type { InvestigationListItem } from "@/types";
@@ -13,6 +17,10 @@ export function InvestigationList() {
   >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // case_id -> the investigator who handled it. Historical and permanent,
+  // deliberately separate from the Officer Box's live presence.
+  const [handledBy, setHandledBy] = useState<Record<string, Investigator | null>>({});
+  const { investigator, authConfigured, loading: authLoading } = useInvestigator();
 
   const loadInvestigations = useCallback(() => {
     setLoading(true);
@@ -34,6 +42,32 @@ export function InvestigationList() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadInvestigations();
   }, [loadInvestigations]);
+
+  useEffect(() => {
+    // Attribution is fetched separately so the existing investigation list
+    // contract is untouched, and its failure leaves the table fully usable
+    // with every case simply shown as unassigned.
+    //
+    // Waiting for the session matters: this endpoint requires a bearer token,
+    // and firing before Supabase has restored the session returned 401 and
+    // left every case reading "Unassigned" with no retry. Depending on the
+    // resolved investigator makes the fetch run again once sign-in completes.
+    if (!authConfigured || authLoading || !investigator) return;
+    let active = true;
+    void listAssignmentsRequest()
+      .then((assignments) => {
+        if (!active) return;
+        setHandledBy(
+          Object.fromEntries(assignments.map((a) => [a.case_id, a.investigator])),
+        );
+      })
+      .catch(() => {
+        if (active) setHandledBy({});
+      });
+    return () => {
+      active = false;
+    };
+  }, [authConfigured, authLoading, investigator]);
 
   if (loading) {
     return (
@@ -148,6 +182,10 @@ export function InvestigationList() {
               <th className="px-6 py-3 font-semibold text-gray-600 dark:text-gray-300">
                 Created Date
               </th>
+
+              <th className="px-6 py-3 font-semibold text-gray-600 dark:text-gray-300">
+                Investigator
+              </th>
             </tr>
           </thead>
 
@@ -155,7 +193,7 @@ export function InvestigationList() {
             {investigations.length === 0 ? (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={6}
                   className="px-6 py-10 text-center text-sm text-gray-500 dark:text-gray-400"
                 >
                   No investigations found.
@@ -192,6 +230,24 @@ export function InvestigationList() {
                       month: "short",
                       day: "numeric",
                     })}
+                  </td>
+
+                  <td className="px-6 py-4">
+                    {handledBy[inv.case_id] ? (
+                      <InvestigatorAvatar
+                        investigator={handledBy[inv.case_id]!}
+                        context="handled this investigation"
+                      />
+                    ) : (
+                      // Cases raised before investigator accounts existed have
+                      // nobody to name; say so rather than inventing one.
+                      <span
+                        className="text-sm text-gray-400 dark:text-gray-500"
+                        title="No investigator recorded for this case"
+                      >
+                        Unassigned
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))

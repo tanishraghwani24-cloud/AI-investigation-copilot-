@@ -332,3 +332,20 @@ export interface InvestigationListItem {
   created_at: string;
   alert_reason?: string;
 }
+
+
+/**
+ * An investigation officer, as rendered in collaboration UI.
+ *
+ * `initial` is computed by the backend from the authenticated account's name,
+ * so the avatar never depends on a hardcoded letter.
+ */
+export interface Investigator {
+  user_id: string;
+  full_name: string;
+  email?: string | null;
+  initial: string;
+  /** The identifier the officer signs in with, e.g. "OFF-001". */
+  officer_id?: string | null;
+  role?: string | null;
+}

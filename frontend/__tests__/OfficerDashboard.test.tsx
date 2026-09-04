@@ -5,9 +5,24 @@ import {
   getMockBankTransactions,
   investigateAlertRequest,
   listAlertsRequest,
+  listPresenceRequest,
 } from "@/services/api";
 
 const push = jest.fn();
+
+// Mutable so individual tests can switch between signed-in and unconfigured.
+let mockAuth = {
+  investigator: {
+    user_id: "11111111-1111-1111-1111-111111111111",
+    full_name: "Rahul Sharma",
+    email: "rahul.sharma@hollabank.com",
+    initial: "R",
+  },
+  loading: false,
+  authConfigured: true,
+  signIn: jest.fn(),
+  signOut: jest.fn(),
+};
 
 jest.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 jest.mock("@/services/api", () => ({
@@ -15,6 +30,10 @@ jest.mock("@/services/api", () => ({
   investigateAlertRequest: jest.fn(),
   getMockBankCustomer: jest.fn(),
   getMockBankTransactions: jest.fn(),
+  listPresenceRequest: jest.fn(),
+}));
+jest.mock("@/components/auth/InvestigatorProvider", () => ({
+  useInvestigator: () => mockAuth,
 }));
 
 const alert = (id: string, extra: Record<string, unknown> = {}) => ({
@@ -43,6 +62,8 @@ describe("Officer Inbox", () => {
       first_name: "Test", last_name: "Customer", risk_rating: "HIGH",
     });
     (getMockBankTransactions as jest.Mock).mockResolvedValue([]);
+    (listPresenceRequest as jest.Mock).mockResolvedValue([]);
+    mockAuth = { ...mockAuth, authConfigured: true };
   });
 
   afterEach(() => jest.useRealTimers());
@@ -191,5 +212,79 @@ describe("Officer Inbox", () => {
       expect.stringContaining("ALERT-HIGH"),
       expect.stringContaining("ALERT-MEDIUM"),
     ]);
+  });
+
+  describe("collaboration presence", () => {
+    const rahul = {
+      user_id: "11111111-1111-1111-1111-111111111111",
+      full_name: "Rahul Sharma",
+      email: "rahul.sharma@hollabank.com",
+      initial: "R",
+    };
+
+    it("shows the avatar of the investigator working a case", async () => {
+      (listAlertsRequest as jest.Mock).mockImplementation((status: string) =>
+        Promise.resolve(
+          status === "INVESTIGATING"
+            ? [alert("ALERT-BUSY", { status: "INVESTIGATING", case_id: "CASE-ALERT-BUSY" })]
+            : [],
+        ),
+      );
+      (listPresenceRequest as jest.Mock).mockResolvedValue([
+        { case_id: "CASE-ALERT-BUSY", investigators: [rahul] },
+      ]);
+
+      render(<OfficerDashboard />);
+
+      const avatar = await screen.findByRole("img", { name: /Rahul Sharma/ });
+      expect(avatar).toHaveTextContent("R");
+      expect(avatar).toHaveAttribute(
+        "title", "Rahul Sharma is currently working on this case",
+      );
+    });
+
+    it("does not offer Investigate on a case someone already picked up", async () => {
+      (listAlertsRequest as jest.Mock).mockImplementation((status: string) =>
+        Promise.resolve(
+          status === "INVESTIGATING"
+            ? [alert("ALERT-BUSY", { status: "INVESTIGATING", case_id: "CASE-ALERT-BUSY" })]
+            : [],
+        ),
+      );
+      (listPresenceRequest as jest.Mock).mockResolvedValue([
+        { case_id: "CASE-ALERT-BUSY", investigators: [rahul] },
+      ]);
+
+      render(<OfficerDashboard />);
+
+      await waitFor(() =>
+        expect(screen.getByText("Investigation in progress")).toBeInTheDocument(),
+      );
+      expect(screen.queryByRole("button", { name: /^investigate$/i })).not.toBeInTheDocument();
+    });
+
+    it("shows no avatar on an alert nobody is working", async () => {
+      render(<OfficerDashboard />);
+
+      await screen.findByRole("button", { name: /investigate/i });
+      expect(screen.queryByRole("img", { name: /Rahul Sharma/ })).not.toBeInTheDocument();
+    });
+
+    it("keeps the queue working when presence cannot be loaded", async () => {
+      (listPresenceRequest as jest.Mock).mockRejectedValue(new Error("offline"));
+
+      render(<OfficerDashboard />);
+
+      expect(await screen.findByRole("button", { name: /investigate/i })).toBeInTheDocument();
+    });
+
+    it("does not request presence when auth is not configured", async () => {
+      mockAuth = { ...mockAuth, authConfigured: false };
+
+      render(<OfficerDashboard />);
+
+      await screen.findByRole("button", { name: /investigate/i });
+      expect(listPresenceRequest).not.toHaveBeenCalled();
+    });
   });
 });

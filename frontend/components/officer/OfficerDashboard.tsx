@@ -8,8 +8,12 @@ import {
   getMockBankTransactions,
   investigateAlertRequest,
   listAlertsRequest,
+  listPresenceRequest,
   type BankAlert,
 } from "@/services/api";
+import { useInvestigator } from "@/components/auth/InvestigatorProvider";
+import { InvestigatorAvatarGroup } from "@/components/investigators/InvestigatorAvatar";
+import type { Investigator } from "@/types";
 
 /**
  * Officer Inbox: a live queue of fraud alerts raised by the Mock Bank.
@@ -85,6 +89,10 @@ export function OfficerDashboard() {
   const [loading, setLoading] = useState(false);
   const [investigatingId, setInvestigatingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // case_id -> investigators currently working it. Fetched on the same poll as
+  // the alerts, so presence needs no separate socket or refresh rhythm.
+  const [presence, setPresence] = useState<Record<string, Investigator[]>>({});
+  const { investigator, authConfigured, loading: authLoading } = useInvestigator();
 
   const loadAlerts = useCallback(async () => {
     try {
@@ -92,7 +100,40 @@ export function OfficerDashboard() {
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load alerts");
     }
-  }, []);
+    // Presence rides the existing alert poll rather than adding a socket. It is
+    // a signed-in-only view and its failure must never break the alert queue,
+    // so it is fetched separately and swallowed on error. It also needs the
+    // session: without a token this endpoint 401s.
+    if (!authConfigured || authLoading || !investigator) return;
+    try {
+      const entries = await listPresenceRequest();
+      const byCase = Object.fromEntries(
+        entries.map((entry) => [entry.case_id, entry.investigators]),
+      );
+      setPresence(byCase);
+
+      // An escalated alert leaves the OPEN queue, so a colleague would never
+      // see who picked it up. Bring back just the ones someone is actively
+      // working, as read-only rows carrying their avatar. They disappear again
+      // when that officer's presence expires.
+      const activeCases = Object.keys(byCase);
+      if (activeCases.length > 0) {
+        const inFlight = (await listAlertsRequest("INVESTIGATING")).filter(
+          (alert) => alert.case_id && activeCases.includes(alert.case_id),
+        );
+        if (inFlight.length > 0) {
+          setAlerts((current) =>
+            sortAlertsBySeverity([
+              ...current.filter((a) => !inFlight.some((f) => f.alert_id === a.alert_id)),
+              ...inFlight,
+            ]),
+          );
+        }
+      }
+    } catch {
+      setPresence({});
+    }
+  }, [authConfigured, authLoading, investigator]);
 
   // Poll so newly simulated alerts arrive without the officer reloading.
   useEffect(() => {
@@ -122,6 +163,10 @@ export function OfficerDashboard() {
   }, []);
 
   const investigate = async (alert: BankAlert) => {
+    if (authConfigured && !investigator) {
+      setError("Sign in as an investigator to start an investigation.");
+      return;
+    }
     setInvestigatingId(alert.alert_id);
     setError(null);
     try {
@@ -131,8 +176,11 @@ export function OfficerDashboard() {
       setAlerts((current) => current.filter((a) => a.alert_id !== alert.alert_id));
       router.push(`/investigations/${result.case_id}`);
     } catch (err: unknown) {
+      // 409 means a colleague already holds this case. Refresh so their avatar
+      // appears straight away instead of leaving a bare error.
       setError(err instanceof Error ? err.message : "Failed to start investigation");
       setInvestigatingId(null);
+      void loadAlerts();
     }
   };
 
@@ -142,8 +190,10 @@ export function OfficerDashboard() {
       <div className="flex max-h-[65vh] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm md:max-h-none md:w-1/3 dark:border-gray-800 dark:bg-gray-900">
         <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-800/50">
           <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Incoming Alerts</h2>
+          {/* Derived from the queue itself, so it falls as alerts are picked up
+              rather than implying a fixed number. */}
           <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-200">
-            {alerts.length}
+            {alerts.length} Active Alert{alerts.length === 1 ? "" : "s"}
           </span>
         </div>
 
@@ -175,7 +225,16 @@ export function OfficerDashboard() {
                     <h3 className="min-w-0 break-words font-medium text-gray-900 dark:text-gray-100">
                       {alert.customer_name ?? alert.account_id}
                     </h3>
-                    <SeverityBadge severity={alert.severity} />
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      <SeverityBadge severity={alert.severity} />
+                      {/* Who is working this case right now, if anyone. */}
+                      <InvestigatorAvatarGroup
+                        investigators={
+                          (alert.case_id && presence[alert.case_id]) || []
+                        }
+                        context="is currently working on this case"
+                      />
+                    </span>
                   </div>
                   <p className="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-gray-300">{alert.reason}</p>
                   <p className="mt-1 break-words text-xs text-gray-400 dark:text-gray-500">
@@ -186,6 +245,13 @@ export function OfficerDashboard() {
                   </p>
                 </button>
 
+                {alert.status !== "OPEN" ? (
+                  // Already picked up: read-only, so two officers cannot start
+                  // competing investigations on the same alert.
+                  <p className="mt-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400">
+                    Investigation in progress
+                  </p>
+                ) : (
                 <button
                   type="button"
                   onClick={() => void investigate(alert)}
@@ -204,6 +270,7 @@ export function OfficerDashboard() {
                     </>
                   )}
                 </button>
+                )}
               </div>
             ))
           )}

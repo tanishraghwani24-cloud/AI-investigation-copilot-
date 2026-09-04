@@ -20,6 +20,28 @@ def _bypass_api_auth():
 
 
 @pytest.fixture(autouse=True)
+def _bypass_investigator_auth():
+    """Bypass the officer-session requirement for the pre-existing suite.
+
+    Data routes now require a verified Supabase officer token as well as the
+    shared secret. These tests exercise business logic and predate officer
+    identity, so they supply no bearer token. The requirement itself is
+    verified directly against the real dependency — see
+    app/api/tests/test_route_protection.py — rather than through this bypass.
+    """
+    from app.core.investigator_auth import Investigator, require_investigator
+    from app.main import app
+
+    app.dependency_overrides[require_investigator] = lambda: Investigator(
+        user_id="00000000-0000-0000-0000-000000000000",
+        email="suite@example.com",
+        full_name="Test Suite",
+    )
+    yield
+    app.dependency_overrides.pop(require_investigator, None)
+
+
+@pytest.fixture(autouse=True)
 def _demo_mode_off_by_default():
     """Pin DEMO_MODE off so results never depend on a developer's local .env.
 

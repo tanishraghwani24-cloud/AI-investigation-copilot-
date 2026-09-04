@@ -13,3 +13,5 @@ pypdf
 Pillow
 aiosqlite
 pytest-asyncio
+PyJWT>=2.8
+cryptography

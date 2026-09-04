@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getServerAccessToken } from "@/lib/supabaseServer";
+import { isAuthConfigured } from "@/lib/supabaseMiddleware";
 import { AlertTriangle, ArrowLeft, FileText } from "lucide-react";
 import { ApiError, getInvestigationRequest } from "@/services/api";
 import { ContextPanel } from "@/components/ContextPanel";
@@ -30,8 +33,16 @@ export default async function InvestigationDetailPage({ params }: PageProps) {
 
   let investigation: InvestigationState | null = null;
   let errorMessage: string | null = null;
+  // This page renders case data server-side, so it needs the officer's session
+  // itself — middleware already gates the route, and this is the second layer
+  // that stops the backend being called with the deployment key alone.
+  const accessToken = await getServerAccessToken();
+  if (isAuthConfigured() && !accessToken) {
+    redirect(`/login?next=${encodeURIComponent(`/investigations/${decodedId}`)}`);
+  }
+
   try {
-    investigation = await getInvestigationRequest(decodedId);
+    investigation = await getInvestigationRequest(decodedId, accessToken);
   } catch (error: unknown) {
     if (error instanceof ApiError && error.status === 404) {
       errorMessage = `No investigation found with ID: ${decodedId}`;

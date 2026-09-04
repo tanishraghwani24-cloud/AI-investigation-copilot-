@@ -39,4 +39,5 @@ export type {
   InvestigationState,
   // Convenience
   InvestigationListItem,
+  Investigator,
 } from "./investigation";

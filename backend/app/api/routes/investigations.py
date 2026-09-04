@@ -3,6 +3,7 @@
 Provides the persisted investigation REST API.
 """
 
+import asyncio
 import secrets
 from datetime import datetime, timezone
 import logging
@@ -16,7 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.rate_limit import rate_limit
 from app.db.session import async_session_factory, get_db_session
 from app.mock_bank.generator import MockBankScenario, generate_investigation_data
+from app.core.config import settings
 from app.services.gemini_client import _demo_mode_enabled
+from app.services.investigator_service import InvestigatorService
 from app.schemas.investigation_state import (
     AgentStatus,
     CaseInput,
@@ -57,6 +60,7 @@ _DEFAULT_SEED: int = 42
 
 # ── Service instance ─────────────────────────────────────────────────
 _investigation_service = InvestigationService()
+_investigators = InvestigatorService()
 
 
 def _build_investigation_state(
@@ -310,9 +314,43 @@ async def get_investigation(
     return state
 
 
+async def _demo_observability_pause() -> None:
+    """Hold a demo investigation in progress long enough to be observed.
+
+    A demo run completes in a couple of seconds, so a second officer polling the
+    Officer Box would never catch the "in progress" presence. Pausing *before*
+    the graph runs widens that window without touching the pipeline or its
+    output. Never applied outside demo mode.
+    """
+    if not _demo_mode_enabled():
+        return
+    delay = float(getattr(settings, "DEMO_INVESTIGATION_DELAY_SECONDS", 0) or 0)
+    if delay <= 0:
+        return
+    logger.info("demo mode: holding investigation in progress for %.1fs", delay)
+    await asyncio.sleep(delay)
+
+
+async def _release_case_presence(case_id: str) -> None:
+    """Clear live presence once the pipeline has stopped running.
+
+    Presence means "being worked on right now", so it ends with the run rather
+    than lingering until the heartbeat TTL. Best-effort: a failure here must
+    never mask the investigation's own outcome, and the TTL still expires the
+    row as a backstop.
+    """
+    try:
+        async with async_session_factory() as session:
+            await _investigators.release_case(session, case_id)
+            await session.commit()
+    except Exception:
+        logger.exception("Could not release case presence for %s", case_id)
+
+
 async def _run_investigation_background(case_id: str) -> None:
     """Execute a scheduled investigation using an independent DB session."""
     try:
+        await _demo_observability_pause()
         async with async_session_factory() as session:
             try:
                 state = await _investigation_service.run_investigation(case_id, session)
@@ -337,6 +375,9 @@ async def _run_investigation_background(case_id: str) -> None:
                 logger.exception("Background investigation failed: %s", case_id)
     except Exception:
         logger.exception("Could not open a session for investigation %s", case_id)
+    finally:
+        # Whether the run succeeded or failed, it is no longer in progress.
+        await _release_case_presence(case_id)
 
 
 @router.post(

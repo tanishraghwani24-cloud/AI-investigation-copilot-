@@ -7,11 +7,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.alerts import router as alerts_router
 from app.api.routes.health import router as health_router
+from app.api.routes.investigators import router as investigators_router
 from app.api.routes.investigations import router as investigations_router
 from app.api.routes.documents import router as documents_router
 from app.api.routes.mock_bank import router as mock_bank_router
 from app.api.errors import register_exception_handlers
 from app.core.config import settings
+from app.core.investigator_auth import require_investigator
 from app.core.security import require_api_key
 
 logger = logging.getLogger(__name__)
@@ -83,20 +85,28 @@ def create_app() -> FastAPI:
     application.include_router(
         investigations_router,
         prefix=settings.API_V1_PREFIX,
-        dependencies=[Depends(require_api_key)],
+        dependencies=[Depends(require_api_key), Depends(require_investigator)],
     )
     application.include_router(
         documents_router,
         prefix=settings.API_V1_PREFIX,
-        dependencies=[Depends(require_api_key)],
+        dependencies=[Depends(require_api_key), Depends(require_investigator)],
     )
     application.include_router(
         mock_bank_router,
         prefix=settings.API_V1_PREFIX,
-        dependencies=[Depends(require_api_key)],
+        dependencies=[Depends(require_api_key), Depends(require_investigator)],
     )
     application.include_router(
         alerts_router,
+        prefix=settings.API_V1_PREFIX,
+        dependencies=[Depends(require_api_key), Depends(require_investigator)],
+    )
+    # API-key only at router level on purpose: /officers/lookup runs before
+    # anyone is signed in. Every other route in this module declares
+    # require_investigator itself, so nothing else is left open.
+    application.include_router(
+        investigators_router,
         prefix=settings.API_V1_PREFIX,
         dependencies=[Depends(require_api_key)],
     )

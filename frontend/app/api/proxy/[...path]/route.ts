@@ -10,6 +10,7 @@
  * see services/api.ts.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { getServerAccessToken } from "@/lib/supabaseServer";
 
 const BACKEND_BASE = (
   process.env.BACKEND_INTERNAL_URL ||
@@ -30,6 +31,14 @@ async function forward(
   if (contentType) headers.set("content-type", contentType);
   headers.set("accept", "application/json");
   if (API_SECRET) headers.set("x-api-key", API_SECRET);
+  // Forward the officer's Supabase access token so the backend can verify *who*
+  // is acting. The shared secret above authenticates the deployment; this header
+  // authenticates the person, and the backend now requires both.
+  //
+  // The token is read from the session cookie rather than from a client-supplied
+  // header, so the browser cannot hand this route an identity it does not hold.
+  const sessionToken = await getServerAccessToken();
+  if (sessionToken) headers.set("authorization", `Bearer ${sessionToken}`);
 
   const hasBody = request.method !== "GET" && request.method !== "HEAD";
 

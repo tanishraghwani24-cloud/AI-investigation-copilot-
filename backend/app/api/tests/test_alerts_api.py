@@ -219,6 +219,43 @@ class TestEscalation:
         assert case_input.alert_reason.startswith("Large transaction")
         assert case_input.customer_profile.customer_id == "CUST-MOCK-001"
 
+    def test_another_officer_cannot_take_over_an_active_case(self, client_for):
+        """Two officers must not both believe they own an in-flight case."""
+        from types import SimpleNamespace
+
+        client, _ = client_for([
+            _alert("ALERT-BUSY", status="INVESTIGATING", case_id="CASE-ALERT-BUSY"),
+        ])
+        holder = SimpleNamespace(
+            user_id="11111111-1111-1111-1111-111111111111",
+            full_name="Rahul Sharma", email="rahul.sharma@hollabank.com",
+        )
+
+        with patch.object(investigation_routes, "_investigation_service", _service()),              patch.object(
+                 alert_routes._investigators, "active_presence",
+                 new=AsyncMock(return_value={"CASE-ALERT-BUSY": [holder]}),
+             ):
+            response = client.post("/api/alerts/ALERT-BUSY/investigate")
+
+        assert response.status_code == 409
+        # The app wraps HTTP errors in its standard envelope.
+        assert "Rahul Sharma" in response.json()["error"]["message"]
+
+    def test_a_case_nobody_is_working_is_not_blocked(self, client_for):
+        """Once the run finishes and presence clears, the case reopens normally."""
+        client, _ = client_for([
+            _alert("ALERT-DONE", status="INVESTIGATING", case_id="CASE-ALERT-DONE"),
+        ])
+
+        with patch.object(investigation_routes, "_investigation_service", _service()),              patch.object(
+                 alert_routes._investigators, "active_presence",
+                 new=AsyncMock(return_value={}),
+             ):
+            response = client.post("/api/alerts/ALERT-DONE/investigate")
+
+        assert response.status_code == 201
+        assert response.json()["created"] is False
+
     def test_an_unknown_alert_is_a_404(self, client_for):
         client, _ = client_for([])
 
