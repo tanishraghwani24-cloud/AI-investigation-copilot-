@@ -32,7 +32,12 @@ describe("reportService", () => {
 
   it("maps persisted investigation reports from the existing investigations API", async () => {
     (listInvestigationsRequest as jest.Mock).mockResolvedValue([
-      { ...completedInvestigation, case_id: "CASE-OLDER", updated_at: "2026-09-01T09:00:00.000Z" },
+      {
+        ...completedInvestigation,
+        case_id: "CASE-OLDER",
+        updated_at: "2026-09-01T09:00:00.000Z",
+        investigation_report: { status: AgentStatus.COMPLETED, generated_at: "2026-08-30T10:00:00.000Z" },
+      },
       completedInvestigation,
       { ...completedInvestigation, case_id: "CASE-INCOMPLETE", current_stage: CurrentStage.DECISION },
     ]);
@@ -46,6 +51,29 @@ describe("reportService", () => {
         createdAt: "2026-09-01T10:00:00.000Z",
       }),
       expect.objectContaining({ caseId: "CASE-OLDER" }),
+    ]);
+  });
+
+  it("orders reports by generated/created timestamp descending, not last-updated", async () => {
+    // CASE-STALE was touched most recently (later updated_at) but its report was
+    // generated first, so it must still sort behind the newer report.
+    const newer = {
+      ...completedInvestigation,
+      case_id: "CASE-FRESH",
+      updated_at: "2026-09-01T11:00:00.000Z",
+      investigation_report: { status: AgentStatus.COMPLETED, generated_at: "2026-09-03T00:00:00.000Z" },
+    };
+    const older = {
+      ...completedInvestigation,
+      case_id: "CASE-STALE",
+      updated_at: "2026-09-05T00:00:00.000Z",
+      investigation_report: { status: AgentStatus.COMPLETED, generated_at: "2026-09-02T00:00:00.000Z" },
+    };
+    (listInvestigationsRequest as jest.Mock).mockResolvedValue([older, newer]);
+
+    await expect(listReports()).resolves.toEqual([
+      expect.objectContaining({ caseId: "CASE-FRESH" }),
+      expect.objectContaining({ caseId: "CASE-STALE" }),
     ]);
   });
 });

@@ -138,4 +138,58 @@ describe("Officer Inbox", () => {
 
     expect(await screen.findByText("No open alerts.")).toBeInTheDocument();
   });
+
+  it("orders the queue HIGH before MEDIUM before LOW regardless of API order", async () => {
+    (listAlertsRequest as jest.Mock).mockResolvedValue([
+      alert("ALERT-LOW", { severity: "LOW", created_at: "2026-09-04T12:00:00Z" }),
+      alert("ALERT-HIGH", { severity: "HIGH", created_at: "2026-09-04T09:00:00Z" }),
+      alert("ALERT-MEDIUM", { severity: "MEDIUM", created_at: "2026-09-04T10:00:00Z" }),
+    ]);
+    render(<OfficerDashboard />);
+
+    const ids = await screen.findAllByText(/^ALERT-/, { exact: false });
+    expect(ids.map((el) => el.textContent)).toEqual([
+      expect.stringContaining("ALERT-HIGH"),
+      expect.stringContaining("ALERT-MEDIUM"),
+      expect.stringContaining("ALERT-LOW"),
+    ]);
+  });
+
+  it("breaks a severity tie by showing the newest alert first", async () => {
+    (listAlertsRequest as jest.Mock).mockResolvedValue([
+      alert("ALERT-OLDER", { severity: "HIGH", created_at: "2026-09-04T08:00:00Z" }),
+      alert("ALERT-NEWER", { severity: "HIGH", created_at: "2026-09-04T09:30:00Z" }),
+    ]);
+    render(<OfficerDashboard />);
+
+    const ids = await screen.findAllByText(/^ALERT-/, { exact: false });
+    expect(ids.map((el) => el.textContent)).toEqual([
+      expect.stringContaining("ALERT-NEWER"),
+      expect.stringContaining("ALERT-OLDER"),
+    ]);
+  });
+
+  it("re-sorts by severity when a new alert arrives on poll", async () => {
+    jest.useFakeTimers();
+    (listAlertsRequest as jest.Mock)
+      .mockResolvedValueOnce([alert("ALERT-MEDIUM", { severity: "MEDIUM" })])
+      .mockResolvedValue([
+        alert("ALERT-MEDIUM", { severity: "MEDIUM" }),
+        alert("ALERT-HIGH", { severity: "HIGH", created_at: "2026-09-04T11:00:00Z" }),
+      ]);
+
+    render(<OfficerDashboard />);
+    await waitFor(() => expect(listAlertsRequest).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      jest.advanceTimersByTime(10_000);
+    });
+    await waitFor(() => expect(listAlertsRequest).toHaveBeenCalledTimes(2));
+
+    const ids = await screen.findAllByText(/^ALERT-/, { exact: false });
+    expect(ids.map((el) => el.textContent)).toEqual([
+      expect.stringContaining("ALERT-HIGH"),
+      expect.stringContaining("ALERT-MEDIUM"),
+    ]);
+  });
 });

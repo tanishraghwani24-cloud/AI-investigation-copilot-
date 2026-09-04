@@ -39,6 +39,6 @@ export async function listReports(): Promise<ReportListItem[]> {
     .filter(isCompletedReport)
     .map(toReportListItem)
     .sort((first, second) =>
-      new Date(second.updatedAt).getTime() - new Date(first.updatedAt).getTime(),
+      new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime(),
     );
 }

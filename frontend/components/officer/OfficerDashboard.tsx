@@ -44,6 +44,23 @@ const SEVERITY_STYLES: Record<string, string> = {
   LOW: "bg-gray-100 text-gray-600 ring-gray-200",
 };
 
+// Priority order for the inbox queue: HIGH before MEDIUM before LOW. Anything
+// outside this set (unexpected severity values) sorts last rather than erroring.
+const SEVERITY_RANK: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+
+/**
+ * Order the queue by severity as reported by the alert API (never
+ * recalculated here), HIGH first; alerts of equal severity are then ordered
+ * newest-first by creation time.
+ */
+function sortAlertsBySeverity(list: BankAlert[]): BankAlert[] {
+  return [...list].sort((a, b) => {
+    const rankDiff = (SEVERITY_RANK[a.severity] ?? 99) - (SEVERITY_RANK[b.severity] ?? 99);
+    if (rankDiff !== 0) return rankDiff;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+}
+
 function SeverityBadge({ severity }: { severity: string }) {
   const style = SEVERITY_STYLES[severity] ?? SEVERITY_STYLES.LOW;
   return (
@@ -70,7 +87,7 @@ export function OfficerDashboard() {
 
   const loadAlerts = useCallback(async () => {
     try {
-      setAlerts(await listAlertsRequest("OPEN"));
+      setAlerts(sortAlertsBySeverity(await listAlertsRequest("OPEN")));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load alerts");
     }

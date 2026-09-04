@@ -19,7 +19,9 @@ function toListItem(investigation: InvestigationState): InvestigationListItem {
 
 export async function listInvestigations(): Promise<InvestigationListItem[]> {
   const investigations = await listInvestigationsRequest();
-  return investigations.map(toListItem);
+  return investigations
+    .map(toListItem)
+    .sort((first, second) => new Date(second.created_at).getTime() - new Date(first.created_at).getTime());
 }
 
 export function getInvestigation(id: string): Promise<InvestigationState> {
