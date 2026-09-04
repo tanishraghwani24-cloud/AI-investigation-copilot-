@@ -32,6 +32,31 @@ from app.services.gemini_client import (
 T = TypeVar("T", bound=BaseModel)
 logger = logging.getLogger(__name__)
 
+# Reasoning models (e.g. openai/gpt-oss-20b) spend part of the completion
+# budget on hidden chain-of-thought before the final answer, so the budget has
+# to cover CoT *and* the JSON document. openai/gpt-oss-20b accepts up to 65536
+# completion tokens (verified against Groq's /models endpoint); 16384 is ample
+# headroom for a measured ~1.5-2.3k-token reasoning call without approaching
+# that ceiling.
+DEFAULT_MAX_COMPLETION_TOKENS = 16384
+
+# Chain-of-thought length is the real consumer of the completion budget, so cap
+# it at the source instead of inflating the budget. Hypothesis generation is a
+# structured extraction task over facts already supplied in the prompt — it does
+# not need deep deliberation, and "low" measurably shortens CoT.
+DEFAULT_REASONING_EFFORT = "low"
+
+# Groq accepts `reasoning_effort` only on chain-of-thought models; sending it to
+# a non-reasoning model (e.g. a Llama chat model) is a 400. Gate on the families
+# that support it so GROQ_MODEL stays freely configurable.
+_REASONING_MODEL_MARKERS = ("gpt-oss", "qwen3", "deepseek-r1")
+
+
+def _supports_reasoning_effort(model_name: str) -> bool:
+    """Return whether *model_name* accepts the ``reasoning_effort`` parameter."""
+    lowered = model_name.lower()
+    return any(marker in lowered for marker in _REASONING_MODEL_MARKERS)
+
 
 class GroqClient:
     """Synchronous Groq client compatible with the investigation agents."""
@@ -46,6 +71,8 @@ class GroqClient:
         backoff_base_seconds: float = DEFAULT_BACKOFF_BASE_SECONDS,
         backoff_max_seconds: float = DEFAULT_BACKOFF_MAX_SECONDS,
         structured_correction_retries: int = DEFAULT_STRUCTURED_CORRECTION_RETRIES,
+        max_completion_tokens: int = DEFAULT_MAX_COMPLETION_TOKENS,
+        reasoning_effort: str | None = DEFAULT_REASONING_EFFORT,
         sleep_fn: Callable[[float], None] = time.sleep,
         client: Any | None = None,
     ) -> None:
@@ -58,6 +85,10 @@ class GroqClient:
         self._backoff_base_seconds = max(0.0, backoff_base_seconds)
         self._backoff_max_seconds = max(0.0, backoff_max_seconds)
         self._structured_correction_retries = max(0, structured_correction_retries)
+        self._max_completion_tokens = max(1, max_completion_tokens)
+        self._reasoning_effort = (
+            reasoning_effort if reasoning_effort and _supports_reasoning_effort(model_name) else None
+        )
         self._sleep = sleep_fn
         if client is None:
             try:
@@ -105,13 +136,45 @@ class GroqClient:
             "model": self._model_name,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0,
+            # `max_completion_tokens` — not the deprecated `max_tokens` — is the
+            # parameter reasoning models honour, and it covers CoT plus answer.
+            "max_completion_tokens": self._max_completion_tokens,
         }
+        if self._reasoning_effort is not None:
+            kwargs["reasoning_effort"] = self._reasoning_effort
         if response_schema is not None:
-            kwargs["response_format"] = {"type": "json_object"}
+            # Loose "json_object" mode only asks the model to *try* to produce
+            # valid JSON by following instructions, so it plans the document
+            # inside its chain-of-thought — measurably ~60% more completion
+            # tokens on an identical prompt. Worse, it is the only mode that can
+            # fail server-side: when the budget runs out mid-document Groq
+            # rejects the whole response with 400 json_validate_failed
+            # ("max completion tokens reached before generating a valid
+            # document") and returns no content at all. Schema-constrained
+            # decoding makes invalid JSON syntax unreachable, so that failure
+            # class cannot occur and a budget overrun degrades to an
+            # inspectable finish_reason="length" instead. Pydantic validation
+            # below remains the actual source of truth.
+            kwargs["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": response_schema.__name__,
+                    "schema": response_schema.model_json_schema(),
+                },
+            }
         for attempt in range(self._max_retries + 1):
             try:
                 response = self._client.chat.completions.create(**kwargs)
-                raw_text = response.choices[0].message.content
+                choice = response.choices[0]
+                if getattr(choice, "finish_reason", None) == "length":
+                    # Truncated mid-document: a correction round-trip would only
+                    # send a longer prompt, so fail with an actionable message.
+                    raise GeminiStructuredOutputError(
+                        "Groq response hit the completion-token limit "
+                        f"({self._max_completion_tokens}) before finishing; "
+                        "raise GROQ_MAX_COMPLETION_TOKENS or reduce the prompt."
+                    )
+                raw_text = choice.message.content
                 if not isinstance(raw_text, str):
                     if response_schema is not None:
                         return ""

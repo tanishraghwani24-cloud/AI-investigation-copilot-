@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { ChevronDown, Network, Scale, Waypoints } from "lucide-react";
 import type { ReportGraphs } from "@/types";
 import { RelationshipGraph } from "@/components/investigations/RelationshipGraph";
@@ -9,15 +12,22 @@ interface InvestigationGraphsProps {
 
 /**
  * Report-level graph visualizations: entity/relationship graph and
- * timeline are the primary, always-visible views; the reasoning and
- * decision-comparison graphs share the same GraphData shape but are
- * secondary, so they live behind a collapsible <details> section to keep
- * this part of the page from crowding out the case findings above it.
+ * timeline are the primary views; the reasoning and decision-comparison
+ * graphs share the same GraphData shape and live in a collapsible
+ * <details> section.
+ *
+ * That section is expanded by default whenever the backend actually supplies
+ * the graphs: the reasoning graph traces hypotheses through evidence,
+ * compliance and decision, which is the part of the report reviewers look for,
+ * and collapsing it by default made it look like it had stopped being
+ * generated. Open state is held in React rather than left to the DOM so that
+ * a collapse survives the investigation page's polling re-renders.
  */
 export function InvestigationGraphs({ graphs }: InvestigationGraphsProps) {
   const hasSecondaryGraphs = Boolean(
     graphs?.reasoning_graph?.nodes.length || graphs?.decision_comparison_graph?.nodes.length,
   );
+  const [secondaryOpen, setSecondaryOpen] = useState(true);
 
   return (
     <section
@@ -46,7 +56,11 @@ export function InvestigationGraphs({ graphs }: InvestigationGraphsProps) {
         </div>
 
         {hasSecondaryGraphs && (
-          <details className="group border-t border-gray-100 pt-6">
+          <details
+            className="group border-t border-gray-100 pt-6"
+            open={secondaryOpen}
+            onToggle={(event) => setSecondaryOpen(event.currentTarget.open)}
+          >
             <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-gray-900">
               <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
               Reasoning &amp; decision graphs

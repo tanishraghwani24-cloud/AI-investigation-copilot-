@@ -1,5 +1,6 @@
 import { ClipboardList, FileWarning, Download } from "lucide-react";
 import { StatusBadge } from "@/components/investigations/StatusBadge";
+import { StructuredNarrative } from "@/components/reports/StructuredNarrative";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AgentStatus } from "@/types";
 import type { InvestigationReport } from "@/types";
@@ -26,17 +27,17 @@ export function ReportViewer({ caseId, report }: ReportViewerProps) {
         </div>
         <StatusBadge value={status} />
       </div>
-      <div className="space-y-4 px-6 py-5">
+      <div className="space-y-6 px-6 py-5">
         {report?.executive_summary ? (
           <>
             <div>
               <h4 className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">Executive summary</h4>
-              <p className="text-sm text-gray-700">{report.executive_summary}</p>
+              <p className="text-sm leading-relaxed text-gray-700">{report.executive_summary}</p>
             </div>
             {report.detailed_narrative && (
               <div>
-                <h4 className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">Detailed narrative</h4>
-                <p className="text-sm text-gray-600">{report.detailed_narrative}</p>
+                <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Detailed narrative</h4>
+                <StructuredNarrative narrative={report.detailed_narrative} />
               </div>
             )}
             {report.generated_at && <p className="text-xs text-gray-400">Generated {new Date(report.generated_at).toLocaleString()}</p>}

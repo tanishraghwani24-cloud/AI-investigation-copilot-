@@ -1,6 +1,11 @@
+import asyncio
+import contextlib
+import logging
+
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routes.alerts import router as alerts_router
 from app.api.routes.health import router as health_router
 from app.api.routes.investigations import router as investigations_router
 from app.api.routes.documents import router as documents_router
@@ -9,12 +14,49 @@ from app.api.errors import register_exception_handlers
 from app.core.config import settings
 from app.core.security import require_api_key
 
+logger = logging.getLogger(__name__)
+
+
+@contextlib.asynccontextmanager
+async def _lifespan(application: FastAPI):
+    """Run the Mock Bank simulator alongside the app when enabled.
+
+    Off by default under tests (see conftest) so a suite never writes simulated
+    rows; the demo enables it through settings.
+    """
+    task = None
+    if getattr(settings, "MOCK_BANK_SIMULATOR_ENABLED", False):
+        from app.db.session import async_session_factory
+        from app.services.alert_simulator import run_simulator_loop
+
+        task = asyncio.create_task(
+            run_simulator_loop(
+                async_session_factory,
+                min_interval=float(settings.MOCK_BANK_SIMULATOR_MIN_SECONDS),
+                max_interval=float(settings.MOCK_BANK_SIMULATOR_MAX_SECONDS),
+            )
+        )
+        logger.info(
+            "alert-simulator: started (every %s-%ss)",
+            settings.MOCK_BANK_SIMULATOR_MIN_SECONDS,
+            settings.MOCK_BANK_SIMULATOR_MAX_SECONDS,
+        )
+    application.state.alert_simulator_task = task
+    try:
+        yield
+    finally:
+        if task is not None:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     application = FastAPI(
         title=settings.APP_NAME,
         version="0.1.0",
+        lifespan=_lifespan,
     )
 
     application.add_middleware(
@@ -50,6 +92,11 @@ def create_app() -> FastAPI:
     )
     application.include_router(
         mock_bank_router,
+        prefix=settings.API_V1_PREFIX,
+        dependencies=[Depends(require_api_key)],
+    )
+    application.include_router(
+        alerts_router,
         prefix=settings.API_V1_PREFIX,
         dependencies=[Depends(require_api_key)],
     )

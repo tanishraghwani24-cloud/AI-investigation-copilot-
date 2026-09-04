@@ -205,7 +205,8 @@ export interface GraphEdge {
   source: string;
   target: string;
   relationship: string;
-  weight?: number;
+  /** Serialised as null (not omitted) for unweighted edges by the backend. */
+  weight?: number | null;
 }
 
 /** Full graph structure for visualization. */

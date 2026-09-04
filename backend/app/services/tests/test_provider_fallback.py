@@ -140,3 +140,68 @@ def test_fallback_failure_never_returns_to_gemini() -> None:
         router.generate("safe", response_schema=Output)
     primary.generate.assert_called_once()
     fallback.generate.assert_called_once()
+
+
+# ── Completion-budget hardening (gpt-oss-20b reasoning truncation) ──────
+
+
+def _groq_request_kwargs(model_name: str, **client_kwargs) -> dict:
+    """Capture the kwargs GroqClient sends to the Groq SDK for one call."""
+    sdk = MagicMock()
+    sdk.chat.completions.create.return_value = MagicMock(
+        choices=[MagicMock(finish_reason="stop", message=MagicMock(content='{"label": "ok"}'))],
+    )
+    GroqClient(
+        api_key="test-secret", model_name=model_name, client=sdk,
+        max_retries=0, structured_correction_retries=0, **client_kwargs,
+    ).generate("safe", response_schema=Output)
+    return sdk.chat.completions.create.call_args.kwargs
+
+
+def test_groq_sends_max_completion_tokens_not_deprecated_max_tokens() -> None:
+    kwargs = _groq_request_kwargs("openai/gpt-oss-20b", max_completion_tokens=16384)
+
+    assert kwargs["max_completion_tokens"] == 16384
+    assert "max_tokens" not in kwargs
+
+
+def test_groq_caps_reasoning_effort_on_reasoning_models() -> None:
+    """Chain-of-thought is what exhausts the budget, so it is capped at source."""
+    assert _groq_request_kwargs("openai/gpt-oss-20b")["reasoning_effort"] == "low"
+
+
+def test_groq_omits_reasoning_effort_on_non_reasoning_models() -> None:
+    """Sending reasoning_effort to a plain chat model is a 400."""
+    assert "reasoning_effort" not in _groq_request_kwargs("llama-3.3-70b-versatile")
+
+
+def test_groq_reasoning_effort_can_be_disabled() -> None:
+    assert "reasoning_effort" not in _groq_request_kwargs(
+        "openai/gpt-oss-20b", reasoning_effort=None,
+    )
+
+
+def test_groq_uses_schema_constrained_decoding_so_json_cannot_be_malformed() -> None:
+    """json_object mode is the only mode that can 400 with json_validate_failed."""
+    response_format = _groq_request_kwargs("openai/gpt-oss-20b")["response_format"]
+
+    assert response_format["type"] == "json_schema"
+    assert response_format["json_schema"]["name"] == "Output"
+    assert response_format["json_schema"]["schema"] == Output.model_json_schema()
+
+
+def test_groq_truncated_completion_fails_with_actionable_error() -> None:
+    """A budget overrun must not be retried with an even longer correction prompt."""
+    sdk = MagicMock()
+    sdk.chat.completions.create.return_value = MagicMock(
+        choices=[MagicMock(finish_reason="length", message=MagicMock(content='{"lab'))],
+    )
+    client = GroqClient(
+        api_key="test-secret", model_name="openai/gpt-oss-20b", client=sdk,
+        max_retries=0, structured_correction_retries=1,
+    )
+
+    with pytest.raises(GeminiClientError, match="completion-token limit"):
+        client.generate("safe", response_schema=Output)
+    sdk.chat.completions.create.assert_called_once()
+    assert "test-secret" not in str(sdk.mock_calls)

@@ -12,7 +12,7 @@ def build_reasoning_prompt(case_json: str, context_json: str) -> str:
     """
     return f"""\
 You are a senior financial crime investigator analysing a potential risk event.
-Your task is to review the case data and context intelligence below, and formulate at least TWO genuinely competing, mutually exclusive investigation hypotheses explaining the activity.
+Your task is to review the case data and context intelligence below, and formulate EXACTLY TWO genuinely competing, mutually exclusive investigation hypotheses explaining the activity.
 
 === CASE DATA ===
 {case_json}
@@ -22,6 +22,8 @@ Your task is to review the case data and context intelligence below, and formula
 
 === INSTRUCTIONS ===
 Produce a rigorous, objective analysis. Respond with a single JSON object (no markdown fences, no extra text) conforming EXACTLY to the schema below.
+
+Answer directly from the facts supplied above — they are already extracted and need no further derivation. Do not deliberate at length before writing; keep each "description" under 80 words and each evidence list to at most 3 short entries.
 
 {{
   "hypotheses": [
@@ -48,7 +50,7 @@ CRITICAL: You may ONLY use facts present in the supplied case data and context i
 7. STRICT CONTRADICTING EVIDENCE: "contradicting_evidence" must contain ONLY evidence that actually exists in the supplied input. Do not invent counter-arguments based on fabricated data.
 8. INSUFFICIENT EVIDENCE PROTOCOL: If there is insufficient evidence, you MUST explicitly state in the description that evidence is limited and recommend what should be verified next.
 9. CONSERVATIVE CONFIDENCE: Confidence scores must remain conservative (e.g., 0.1 to 0.4) when evidence is sparse.
-10. COMPETING EXPLANATIONS: You must still provide at least TWO hypotheses representing materially different explanations (e.g., "Account Takeover" vs "Authorized unusual activity").
+10. COMPETING EXPLANATIONS: You must provide EXACTLY TWO hypotheses representing materially different explanations (e.g., "Account Takeover" vs "Authorized unusual activity").
 11. FORMATTING: Return ONLY the raw JSON object. No markdown blocks, no conversational text.
 """
 

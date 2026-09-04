@@ -20,6 +20,39 @@ def _bypass_api_auth():
 
 
 @pytest.fixture(autouse=True)
+def _demo_mode_off_by_default():
+    """Pin DEMO_MODE off so results never depend on a developer's local .env.
+
+    A machine running the demo has DEMO_MODE=true in .env, which would
+    otherwise swap real clients for the deterministic stand-in mid-suite and
+    silently change behaviour (blank-PDF OCR, for one). Tests that want demo
+    mode set it explicitly.
+    """
+    from app.core.config import settings
+
+    previous = getattr(settings, "DEMO_MODE", False)
+    settings.DEMO_MODE = False
+    yield
+    settings.DEMO_MODE = previous
+
+
+@pytest.fixture(autouse=True)
+def _alert_simulator_off_by_default():
+    """Keep the Mock Bank simulator out of the suite.
+
+    TestClient runs the app's startup hooks, so leaving the simulator enabled
+    would spawn a background loop writing simulated transactions and alerts
+    during unrelated tests. Simulator tests drive it directly instead.
+    """
+    from app.core.config import settings
+
+    previous = getattr(settings, "MOCK_BANK_SIMULATOR_ENABLED", True)
+    settings.MOCK_BANK_SIMULATOR_ENABLED = False
+    yield
+    settings.MOCK_BANK_SIMULATOR_ENABLED = previous
+
+
+@pytest.fixture(autouse=True)
 def _reset_rate_limits():
     """Reset the in-memory rate limiter between tests.
 

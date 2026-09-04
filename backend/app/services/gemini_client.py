@@ -13,7 +13,7 @@ import json
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Any, Callable, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
 import httpx
 from google import genai
@@ -22,6 +22,9 @@ from google.genai import types as genai_types
 from pydantic import BaseModel, ValidationError
 
 from app.core.config import settings
+
+if TYPE_CHECKING:  # pragma: no cover - typing only, avoids a circular import
+    from app.services.demo_client import DemoLLMClient
 
 T = TypeVar("T", bound=BaseModel)
 logger = logging.getLogger(__name__)
@@ -365,8 +368,56 @@ def _setting(name: str, default: int | float) -> int | float:
     return _numeric_setting(value, float(default))
 
 
-def get_gemini_client() -> GeminiClient:
-    """Create a GeminiClient from central application settings."""
+def _demo_mode_enabled() -> bool:
+    """Return whether the deterministic demo stand-in should replace providers.
+
+    Fails closed on purpose. Only an explicit boolean True or a recognised
+    truthy string opts in; anything else — including a settings object that
+    simply does not define the flag — leaves the production provider chain in
+    place. A permissive ``bool(value)`` here would silently swap real providers
+    for canned answers whenever the attribute held some unrelated truthy
+    object, which is exactly the failure demo mode must never cause.
+    """
+    value = getattr(settings, "DEMO_MODE", False)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    if isinstance(value, int):
+        return value == 1
+    return False
+
+
+def _demo_client_if_enabled(caller: str) -> "DemoLLMClient | None":
+    """Return the demo stand-in when demo mode is on, else None.
+
+    Every provider-client factory consults this, so demo mode is enforced at
+    the one place provider clients come into existence rather than by scattered
+    checks in each agent. Nothing in the codebase constructs a provider client
+    without going through one of those factories.
+    """
+    if not _demo_mode_enabled():
+        return None
+
+    from app.services.demo_client import DemoLLMClient
+
+    logger.warning(
+        "provider=demo caller=%s DEMO_MODE is enabled — responses are deterministic "
+        "stand-ins and no live LLM provider will be called.", caller,
+    )
+    return DemoLLMClient()
+
+
+def get_gemini_client() -> "GeminiClient | DemoLLMClient":
+    """Create a GeminiClient from central application settings.
+
+    Returns the deterministic stand-in under demo mode so non-agent callers
+    (document OCR, for one) also stay offline.
+    """
+    demo = _demo_client_if_enabled("get_gemini_client")
+    if demo is not None:
+        return demo
+
     kwargs: dict[str, Any] = {
         "max_retries": int(_setting("GEMINI_MAX_RETRIES", DEFAULT_MAX_RETRIES)),
         "backoff_base_seconds": float(
@@ -395,6 +446,10 @@ def get_gemini_client() -> GeminiClient:
 
 def get_groq_client() -> object:
     """Create the configured Groq fallback client only when it is needed."""
+    demo = _demo_client_if_enabled("get_groq_client")
+    if demo is not None:
+        return demo
+
     from app.services.groq_client import GroqClient
 
     kwargs: dict[str, Any] = {
@@ -402,7 +457,12 @@ def get_groq_client() -> object:
         "backoff_base_seconds": float(_setting("GROQ_BACKOFF_BASE_SECONDS", DEFAULT_BACKOFF_BASE_SECONDS)),
         "backoff_max_seconds": float(_setting("GROQ_BACKOFF_MAX_SECONDS", DEFAULT_BACKOFF_MAX_SECONDS)),
         "structured_correction_retries": int(_setting("GROQ_STRUCTURED_CORRECTION_RETRIES", DEFAULT_STRUCTURED_CORRECTION_RETRIES)),
+        "max_completion_tokens": int(_setting("GROQ_MAX_COMPLETION_TOKENS", 16384)),
     }
+    reasoning_effort = getattr(settings, "GROQ_REASONING_EFFORT", "low")
+    kwargs["reasoning_effort"] = (
+        reasoning_effort.strip() or None if isinstance(reasoning_effort, str) else None
+    )
     timeout = getattr(settings, "GROQ_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS)
     if isinstance(timeout, (int, float)):
         kwargs["timeout_seconds"] = float(timeout)
@@ -415,6 +475,12 @@ def get_groq_client() -> object:
 
 def get_reasoning_client() -> object:
     """Return the primary LLM client, with a one-way optional fallback."""
+    # Deliberately the first branch: when DEMO_MODE is false nothing below
+    # changes, so the production provider chain is untouched.
+    demo = _demo_client_if_enabled("get_reasoning_client")
+    if demo is not None:
+        return demo
+
     primary_value = getattr(settings, "LLM_PRIMARY_PROVIDER", "gemini")
     provider = primary_value.strip().lower() if isinstance(primary_value, str) else "gemini"
     legacy_value = getattr(settings, "REASONING_LLM_PROVIDER", "gemini")

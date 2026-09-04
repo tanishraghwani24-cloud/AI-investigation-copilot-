@@ -99,6 +99,7 @@ export function createInvestigationRequest(accountId?: string): Promise<Investig
   });
 }
 
+
 export function runInvestigationRequest(caseId: string): Promise<InvestigationState> {
   return requestJson<InvestigationState>(
     `/investigations/${encodeURIComponent(caseId)}/run`,
@@ -135,5 +136,48 @@ export function getMockBankCustomer(customerId: string): Promise<unknown> {
   return requestJson<unknown>(
     `/mock-bank/customers/${encodeURIComponent(customerId)}`,
     { cache: "no-store" }
+  );
+}
+
+/** One fraud alert in the Officer Inbox. */
+export interface BankAlert {
+  alert_id: string;
+  transaction_id: string;
+  account_id: string;
+  customer_id?: string | null;
+  customer_name?: string | null;
+  reason: string;
+  severity: string;
+  risk_score: number;
+  status: string;
+  case_id?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+  transaction_type?: string | null;
+  created_at: string;
+}
+
+/** The investigation an alert was escalated to. */
+export interface InvestigateAlertResult {
+  alert_id: string;
+  case_id: string;
+  created: boolean;
+}
+
+export function listAlertsRequest(status: "OPEN" | "INVESTIGATING" | "ALL" = "OPEN"): Promise<BankAlert[]> {
+  return requestJson<BankAlert[]>(`/alerts?status=${status}`);
+}
+
+/**
+ * Escalate one alert into its own investigation.
+ *
+ * The backend derives the case ID from the alert, so calling this twice for the
+ * same alert returns the existing case (`created: false`) instead of creating a
+ * second investigation.
+ */
+export function investigateAlertRequest(alertId: string): Promise<InvestigateAlertResult> {
+  return requestJson<InvestigateAlertResult>(
+    `/alerts/${encodeURIComponent(alertId)}/investigate`,
+    { method: "POST" },
   );
 }

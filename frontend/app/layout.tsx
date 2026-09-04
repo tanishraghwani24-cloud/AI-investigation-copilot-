@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 const navItems = [
   { label: 'Officer Inbox', href: '/officer' },
   { label: 'Investigations', href: '/investigations' },
-  { label: 'Reports', href: '#' },
+  { label: 'Reports', href: '/reports' },
   { label: 'Settings', href: '#' },
 ];
 

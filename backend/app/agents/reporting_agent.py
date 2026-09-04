@@ -26,61 +26,87 @@ def _items(values: list[str], empty: str = "None provided") -> str:
 
 
 def _build_entity_graph(state: InvestigationState) -> GraphData:
+    """Build the entity graph from every entity the case actually supplies.
+
+    Accounts and the transfers between them are present on every case —
+    ``sender_account`` and ``receiver_account`` are required fields — so they
+    are graphed alongside the optional customer/merchant/beneficiary/device
+    records. Building only from the optional records left a case that has five
+    transactions and two accounts rendering as a single isolated node.
+
+    Nothing here is synthesised: a node appears only when the case carries the
+    entity, and an edge only when both of its endpoints exist.
+    """
     case_input = state.case_input
     nodes: list[GraphNode] = []
     edges: list[GraphEdge] = []
+    seen: set[str] = set()
+
+    def add_node(node_id: str | None, label: str, node_type: str, metadata: dict[str, str]) -> None:
+        if not node_id or node_id in seen:
+            return
+        seen.add(node_id)
+        nodes.append(GraphNode(
+            node_id=node_id, label=label or node_id, node_type=node_type, metadata=metadata,
+        ))
+
+    def add_edge(source: str | None, target: str | None, relationship: str,
+                 weight: float | None = None) -> None:
+        if not source or not target or source == target:
+            return
+        if source not in seen or target not in seen:
+            return
+        edges.append(GraphEdge(
+            source=source, target=target, relationship=relationship, weight=weight,
+        ))
 
     customer = case_input.customer_profile
     if customer:
-        nodes.append(GraphNode(
-            node_id=customer.customer_id,
-            label=customer.name,
-            node_type="PERSON",
-            metadata={"customer_id": customer.customer_id},
-        ))
+        add_node(customer.customer_id, customer.name, "PERSON",
+                 {"customer_id": customer.customer_id})
     merchant = case_input.merchant_info
     if merchant:
-        nodes.append(GraphNode(
-            node_id=merchant.merchant_id,
-            label=merchant.name,
-            node_type="MERCHANT",
-            metadata={"merchant_id": merchant.merchant_id},
-        ))
+        add_node(merchant.merchant_id, merchant.name, "MERCHANT",
+                 {"merchant_id": merchant.merchant_id})
     beneficiary = case_input.beneficiary_info
     if beneficiary:
-        nodes.append(GraphNode(
-            node_id=beneficiary.beneficiary_id,
-            label=beneficiary.name,
-            node_type="BENEFICIARY",
-            metadata={"beneficiary_id": beneficiary.beneficiary_id},
-        ))
+        add_node(beneficiary.beneficiary_id, beneficiary.name, "BENEFICIARY",
+                 {"beneficiary_id": beneficiary.beneficiary_id})
     device = case_input.device_info
     if device and device.device_id:
-        nodes.append(GraphNode(
-            node_id=device.device_id,
-            label=device.device_id,
-            node_type="DEVICE",
-            metadata={"device_id": device.device_id},
-        ))
+        add_node(device.device_id, device.device_id, "DEVICE",
+                 {"device_id": device.device_id})
 
-    if customer and beneficiary:
-        edges.append(GraphEdge(
-            source=customer.customer_id,
-            target=beneficiary.beneficiary_id,
-            relationship="ASSOCIATED_WITH",
-        ))
+    # Accounts named by the transactions themselves.
+    sender_accounts: list[str] = []
+    for transaction in case_input.transactions:
+        for account in (transaction.sender_account, transaction.receiver_account):
+            add_node(account, account, "ACCOUNT", {"account_id": account})
+        if transaction.sender_account and transaction.sender_account not in sender_accounts:
+            sender_accounts.append(transaction.sender_account)
+
+    # One edge per account pair, weighted by the total value moved between them,
+    # so a case with many transfers stays readable instead of drawing parallels.
+    transferred: dict[tuple[str, str], float] = {}
+    for transaction in case_input.transactions:
+        pair = (transaction.sender_account, transaction.receiver_account)
+        if pair[0] and pair[1] and pair[0] != pair[1]:
+            transferred[pair] = transferred.get(pair, 0.0) + transaction.amount
+    for (source, target), total in transferred.items():
+        add_edge(source, target, "SENT_TO", weight=round(total, 2))
+
+    if customer:
+        for account in sender_accounts:
+            add_edge(customer.customer_id, account, "OWNS")
+    if beneficiary:
+        add_edge(beneficiary.beneficiary_id, beneficiary.account_number, "HOLDS")
+        add_edge(customer.customer_id if customer else None,
+                 beneficiary.beneficiary_id, "ASSOCIATED_WITH")
     if beneficiary and merchant:
-        edges.append(GraphEdge(
-            source=beneficiary.beneficiary_id,
-            target=merchant.merchant_id,
-            relationship="IDENTIFIED_AS",
-        ))
+        add_edge(beneficiary.beneficiary_id, merchant.merchant_id, "IDENTIFIED_AS")
     if customer and device and device.device_id:
-        edges.append(GraphEdge(
-            source=customer.customer_id,
-            target=device.device_id,
-            relationship="USED_DEVICE",
-        ))
+        add_edge(customer.customer_id, device.device_id, "USED_DEVICE")
+
     return GraphData(nodes=nodes, edges=edges)
 
 

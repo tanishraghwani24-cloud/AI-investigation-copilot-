@@ -195,3 +195,65 @@ class MockBankTransaction(Base):
 
     def __repr__(self) -> str:
         return f"<MockBankTransaction transaction_id={self.transaction_id!r}>"
+
+
+class MockBankAlert(Base):
+    """A fraud alert raised against one Mock Bank transaction.
+
+    Alerts are produced by the Mock Bank simulator from real transaction rows
+    using the same thresholds the Context agent applies, so an alert always
+    points at a transaction that exists. ``transaction_id`` is unique, which is
+    what prevents the simulator from raising a second alert for the same
+    transaction.
+
+    ``case_id`` records the investigation an officer triggered from this alert.
+    It is the alert-to-investigation link, and — being set once — is also what
+    stops the same alert creating a duplicate investigation.
+    """
+
+    __tablename__ = "mock_bank_alerts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+    alert_id: Mapped[str] = mapped_column(
+        String(64), unique=True, index=True, nullable=False,
+    )
+    transaction_id: Mapped[str] = mapped_column(
+        String(64), unique=True, index=True, nullable=False,
+    )
+    account_id: Mapped[str] = mapped_column(
+        String(64), index=True, nullable=False,
+    )
+    customer_id: Mapped[str | None] = mapped_column(
+        String(64), nullable=True,
+    )
+    reason: Mapped[str] = mapped_column(
+        Text, nullable=False,
+    )
+    severity: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="MEDIUM",
+    )
+    risk_score: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.5,
+    )
+    # OPEN until an officer investigates it, then INVESTIGATING.
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="OPEN", index=True,
+    )
+    case_id: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        server_default=text("now()"),
+        index=True,
+    )
+
+    def __repr__(self) -> str:
+        return f"<MockBankAlert alert_id={self.alert_id!r} status={self.status!r}>"

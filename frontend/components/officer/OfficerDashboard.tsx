@@ -1,15 +1,27 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getMockBankTransactions, getMockBankCustomer, runInvestigationRequest } from "@/services/api";
-import { createInvestigation } from "@/services/investigationService";
+import { AlertTriangle, Inbox, Loader2, ShieldAlert } from "lucide-react";
+import {
+  getMockBankCustomer,
+  getMockBankTransactions,
+  investigateAlertRequest,
+  listAlertsRequest,
+  type BankAlert,
+} from "@/services/api";
 
-const KNOWN_ACCOUNTS = [
-  { id: "ACC-MOCK-001", customerId: "CUST-MOCK-001", name: "High Risk Activity" },
-  { id: "ACC-MOCK-002", customerId: "CUST-MOCK-002", name: "Routine Threshold Alert" },
-  { id: "ACC-MOCK-003", customerId: "CUST-MOCK-003", name: "Incomplete KYC Alert" },
-];
+/**
+ * Officer Inbox: a live queue of fraud alerts raised by the Mock Bank.
+ *
+ * Alerts come from the backend simulator, not from this component — the inbox
+ * only polls and escalates. "Investigate" hands the alert to the backend, which
+ * creates the case tied to that alert and starts the pipeline; the alert's
+ * status change is likewise backend state, so a handled alert stays handled
+ * across a reload.
+ */
+
+const POLL_INTERVAL_MS = 10_000;
 
 interface MockCustomer {
   first_name?: string;
@@ -26,121 +38,217 @@ interface MockTransaction {
   amount: number;
 }
 
+const SEVERITY_STYLES: Record<string, string> = {
+  HIGH: "bg-red-50 text-red-700 ring-red-200",
+  MEDIUM: "bg-amber-50 text-amber-700 ring-amber-200",
+  LOW: "bg-gray-100 text-gray-600 ring-gray-200",
+};
+
+function SeverityBadge({ severity }: { severity: string }) {
+  const style = SEVERITY_STYLES[severity] ?? SEVERITY_STYLES.LOW;
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${style}`}>
+      {severity}
+    </span>
+  );
+}
+
+function formatAmount(amount?: number | null, currency?: string | null) {
+  if (amount == null) return null;
+  return `${amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} ${currency ?? "USD"}`;
+}
+
 export function OfficerDashboard() {
   const router = useRouter();
-  const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
+  const [alerts, setAlerts] = useState<BankAlert[]>([]);
+  const [selected, setSelected] = useState<BankAlert | null>(null);
   const [customer, setCustomer] = useState<MockCustomer | null>(null);
   const [transactions, setTransactions] = useState<MockTransaction[]>([]);
   const [loading, setLoading] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [investigatingId, setInvestigatingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const loadAccountDetails = useCallback(async (accountId: string, customerId: string) => {
-    setSelectedAccount(accountId);
+  const loadAlerts = useCallback(async () => {
+    try {
+      setAlerts(await listAlertsRequest("OPEN"));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load alerts");
+    }
+  }, []);
+
+  // Poll so newly simulated alerts arrive without the officer reloading.
+  useEffect(() => {
+    // Initial fetch on mount; the same pattern the investigations list uses.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadAlerts();
+    const timer = setInterval(() => void loadAlerts(), POLL_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [loadAlerts]);
+
+  const selectAlert = useCallback(async (alert: BankAlert) => {
+    setSelected(alert);
     setLoading(true);
     setError(null);
     try {
       const [custData, txnsData] = await Promise.all([
-        getMockBankCustomer(customerId),
-        getMockBankTransactions(accountId),
+        alert.customer_id ? getMockBankCustomer(alert.customer_id) : Promise.resolve(null),
+        getMockBankTransactions(alert.account_id),
       ]);
-      setCustomer(custData as MockCustomer);
-      const txnsArray = txnsData as MockTransaction[];
-      setTransactions(txnsArray.slice(-10)); // Show last 10 transactions
+      setCustomer(custData as MockCustomer | null);
+      setTransactions((txnsData as MockTransaction[]).slice(-10).reverse());
     } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : "Failed to load account data";
-      setError(errorMsg);
+      setError(err instanceof Error ? err.message : "Failed to load account data");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const handleTriggerInvestigation = async () => {
-    if (!selectedAccount) return;
-    setCreating(true);
+  const investigate = async (alert: BankAlert) => {
+    setInvestigatingId(alert.alert_id);
     setError(null);
     try {
-      const state = await createInvestigation(selectedAccount);
-      await runInvestigationRequest(state.case_id);
-      router.push(`/investigations/${state.case_id}`);
+      const result = await investigateAlertRequest(alert.alert_id);
+      // The backend has marked the alert INVESTIGATING; drop it from the
+      // actionable queue immediately rather than waiting for the next poll.
+      setAlerts((current) => current.filter((a) => a.alert_id !== alert.alert_id));
+      router.push(`/investigations/${result.case_id}`);
     } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : "Failed to trigger investigation";
-      setError(errorMsg);
-      setCreating(false);
+      setError(err instanceof Error ? err.message : "Failed to start investigation");
+      setInvestigatingId(null);
     }
   };
 
   return (
     <div className="flex h-full gap-6">
-      {/* Sidebar / Alert List */}
-      <div className="w-1/3 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-4 border-b border-gray-200 bg-gray-50">
+      {/* Alert queue */}
+      <div className="flex w-1/3 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 p-4">
           <h2 className="text-lg font-semibold text-gray-800">Incoming Alerts</h2>
+          <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700">
+            {alerts.length}
+          </span>
         </div>
-        <div className="flex-1 overflow-y-auto p-2">
-          {KNOWN_ACCOUNTS.map((acc) => (
-            <button
-              key={acc.id}
-              onClick={() => loadAccountDetails(acc.id, acc.customerId)}
-              className={`w-full text-left p-4 mb-2 rounded-lg border transition-colors ${
-                selectedAccount === acc.id
-                  ? "bg-blue-50 border-blue-200 ring-1 ring-blue-500"
-                  : "bg-white border-gray-200 hover:bg-gray-50"
-              }`}
-            >
-              <h3 className="font-medium text-gray-900">{acc.name}</h3>
-              <p className="text-sm text-gray-500 mt-1">{acc.id}</p>
-            </button>
-          ))}
+
+        <div className="flex-1 overflow-y-auto p-2" data-testid="alert-queue">
+          {alerts.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center p-6 text-center text-gray-500">
+              <Inbox className="mb-3 h-10 w-10 text-gray-300" />
+              <p className="text-sm">No open alerts.</p>
+              <p className="mt-1 text-xs text-gray-400">
+                New alerts appear here automatically as the bank detects them.
+              </p>
+            </div>
+          ) : (
+            alerts.map((alert) => (
+              <div
+                key={alert.alert_id}
+                className={`mb-2 rounded-lg border p-4 transition-colors ${
+                  selected?.alert_id === alert.alert_id
+                    ? "border-blue-200 bg-blue-50 ring-1 ring-blue-500"
+                    : "border-gray-200 bg-white hover:bg-gray-50"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => void selectAlert(alert)}
+                  className="w-full text-left"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-medium text-gray-900">
+                      {alert.customer_name ?? alert.account_id}
+                    </h3>
+                    <SeverityBadge severity={alert.severity} />
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-sm text-gray-600">{alert.reason}</p>
+                  <p className="mt-1 text-xs text-gray-400">
+                    {alert.alert_id}
+                    {formatAmount(alert.amount, alert.currency)
+                      ? ` · ${formatAmount(alert.amount, alert.currency)}`
+                      : ""}
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void investigate(alert)}
+                  disabled={investigatingId !== null}
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {investigatingId === alert.alert_id ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                      Starting…
+                    </>
+                  ) : (
+                    <>
+                      <ShieldAlert className="h-4 w-4" aria-hidden="true" />
+                      Investigate
+                    </>
+                  )}
+                </button>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
-      {/* Main Panel / Account Details */}
-      <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 p-6 overflow-y-auto flex flex-col">
-        {selectedAccount ? (
+      {/* Alert detail */}
+      <div className="flex flex-1 flex-col overflow-y-auto rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        {error && (
+          <div role="alert" className="mb-4 rounded-lg bg-red-50 p-4 text-red-600">
+            {error}
+          </div>
+        )}
+
+        {selected ? (
           loading ? (
             <div className="animate-pulse space-y-4">
-              <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-              <div className="h-32 bg-gray-100 rounded"></div>
-              <div className="h-64 bg-gray-100 rounded"></div>
+              <div className="h-8 w-1/3 rounded bg-gray-200" />
+              <div className="h-32 rounded bg-gray-100" />
+              <div className="h-64 rounded bg-gray-100" />
             </div>
-          ) : error ? (
-            <div className="text-red-600 bg-red-50 p-4 rounded-lg">{error}</div>
           ) : (
             <>
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-900">
-                    {customer?.first_name} {customer?.last_name}
-                  </h1>
-                  <p className="text-gray-500 mt-1">
-                    Risk Rating: <span className="font-medium">{customer?.risk_rating}</span> | {customer?.occupation}
-                  </p>
+              <div className="mb-6">
+                <div className="flex items-center gap-2 text-sm font-medium text-red-600">
+                  <AlertTriangle className="h-4 w-4" />
+                  {selected.alert_id}
                 </div>
-                <button
-                  onClick={handleTriggerInvestigation}
-                  disabled={creating}
-                  className="px-6 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
-                >
-                  {creating ? "Triggering..." : "Trigger Investigation"}
-                </button>
+                <h1 className="mt-1 text-2xl font-bold text-gray-900">
+                  {customer?.first_name} {customer?.last_name}
+                </h1>
+                <p className="mt-1 text-gray-500">
+                  Risk Rating: <span className="font-medium">{customer?.risk_rating}</span>
+                  {customer?.occupation ? ` | ${customer.occupation}` : ""}
+                </p>
+                <p className="mt-3 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  {selected.reason}
+                </p>
+                <p className="mt-2 text-xs text-gray-400">
+                  Triggering transaction: {selected.transaction_id}
+                </p>
               </div>
 
               <div className="mb-6">
-                <h2 className="text-lg font-semibold text-gray-800 mb-4">Recent Transactions</h2>
+                <h2 className="mb-4 text-lg font-semibold text-gray-800">Recent Transactions</h2>
                 <div className="overflow-x-auto rounded-lg border border-gray-200">
-                  <table className="w-full text-sm text-left">
+                  <table className="w-full text-left text-sm">
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="px-4 py-3 font-medium text-gray-600">Date</th>
                         <th className="px-4 py-3 font-medium text-gray-600">Type</th>
                         <th className="px-4 py-3 font-medium text-gray-600">Description</th>
-                        <th className="px-4 py-3 font-medium text-gray-600 text-right">Amount</th>
+                        <th className="px-4 py-3 text-right font-medium text-gray-600">Amount</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
                       {transactions.map((txn) => (
-                        <tr key={txn.transaction_id}>
+                        <tr
+                          key={txn.transaction_id}
+                          className={
+                            txn.transaction_id === selected.transaction_id ? "bg-amber-50" : ""
+                          }
+                        >
                           <td className="px-4 py-3 text-gray-500">
                             {new Date(txn.timestamp).toLocaleDateString()}
                           </td>
@@ -165,11 +273,8 @@ export function OfficerDashboard() {
             </>
           )
         ) : (
-          <div className="h-full flex flex-col items-center justify-center text-gray-500">
-            <svg className="w-16 h-16 mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-            </svg>
+          <div className="flex h-full flex-col items-center justify-center text-gray-500">
+            <Inbox className="mb-4 h-16 w-16 text-gray-300" />
             <p className="text-lg">Select an alert to view details</p>
           </div>
         )}

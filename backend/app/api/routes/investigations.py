@@ -3,6 +3,7 @@
 Provides the persisted investigation REST API.
 """
 
+import secrets
 from datetime import datetime, timezone
 import logging
 from typing import Annotated
@@ -15,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.rate_limit import rate_limit
 from app.db.session import async_session_factory, get_db_session
 from app.mock_bank.generator import MockBankScenario, generate_investigation_data
+from app.services.gemini_client import _demo_mode_enabled
 from app.schemas.investigation_state import (
     AgentStatus,
     CaseInput,
@@ -26,6 +28,7 @@ from app.schemas.investigation_state import (
 )
 from app.services.investigation_service import InvestigationService
 from app.services.mock_bank_service import MockBankService
+from app.services.report_pdf_service import render_investigation_report_pdf
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -131,6 +134,37 @@ def _build_investigation_state(
     return create_initial_state(case_id=case_id, case_input=case_input)
 
 
+# A fresh case is generated from an unused Mock Bank seed. The seed feeds both
+# the case_id and the generated customer/account/transactions, so a new seed
+# yields a genuinely different, valid case rather than a renamed copy of an
+# existing one. Collisions are re-rolled rather than silently reusing a case.
+_FRESH_SEED_MIN: int = 10_000
+_FRESH_SEED_MAX: int = 999_999
+_FRESH_SEED_ATTEMPTS: int = 12
+
+
+async def _build_fresh_investigation_state(
+    scenario: MockBankScenario | str,
+    db: AsyncSession,
+) -> InvestigationState:
+    """Build a Mock Bank case whose ID is not already taken.
+
+    ``create_investigation`` is idempotent per case ID, so reusing the default
+    seed would re-open the same case instead of creating one. Picking an unused
+    seed is what makes each request a distinct investigation.
+    """
+    span = _FRESH_SEED_MAX - _FRESH_SEED_MIN
+    for _ in range(_FRESH_SEED_ATTEMPTS):
+        seed = _FRESH_SEED_MIN + secrets.randbelow(span)
+        state = _build_investigation_state(seed, scenario=scenario)
+        if await _investigation_service.get_investigation(state.case_id, db) is None:
+            return state
+    raise HTTPException(
+        status_code=503,
+        detail="Could not allocate an unused investigation ID; please retry.",
+    )
+
+
 async def _build_investigation_state_from_db(account_id: str, db: AsyncSession) -> InvestigationState:
     svc = MockBankService()
     account = await svc.get_account(db, account_id)
@@ -190,21 +224,40 @@ async def _build_investigation_state_from_db(account_id: str, db: AsyncSession) 
 async def create_investigation(
     scenario: MockBankScenario = Query(default=MockBankScenario.DEFAULT),
     account_id: str | None = Query(default=None, description="Mock bank account to investigate"),
+    fresh: bool = Query(
+        default=False,
+        description="Allocate a new case ID instead of reopening the deterministic seed=42 case.",
+    ),
     db: AsyncSession = Depends(get_db_session),
 ) -> InvestigationState:
     """Create a new investigation case.
 
-    Persists a deterministic Mock Bank case input (seed=42). Agent outputs
-    are populated only when the investigation is subsequently run.
+    Persists a deterministic Mock Bank case input (seed=42) by default, so
+    repeated calls reopen the same case. Pass ``fresh=true`` to allocate a new
+    case from an unused seed — creation is idempotent per case ID, so that flag
+    is what makes a request create rather than reopen. ``account_id`` continues
+    to map an account to its own stable case. Agent outputs are populated only
+    when the investigation is subsequently run.
     """
     if account_id:
         state = await _build_investigation_state_from_db(account_id, db)
+    elif fresh:
+        state = await _build_fresh_investigation_state(scenario, db)
     else:
         state = _build_investigation_state(_DEFAULT_SEED, scenario=scenario)
 
+    case_input = state.case_input
+    if _demo_mode_enabled():
+        # Mock Bank supplies no counterparty or device, which would leave the
+        # report's entity graph a single isolated node. Demo mode derives them
+        # from the case; production case building is unchanged.
+        from app.services.demo_data import enrich_case_for_demo
+
+        case_input = enrich_case_for_demo(case_input)
+
     return await _investigation_service.create_investigation(
         state.case_id,
-        state.case_input,
+        case_input,
         db,
     )
 
@@ -353,4 +406,29 @@ async def download_report(
         content=report.detailed_narrative,
         media_type="text/markdown",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/investigations/{case_id}/report/download.pdf")
+async def download_report_pdf(
+    case_id: CaseIdPath,
+    db: AsyncSession = Depends(get_db_session),
+) -> Response:
+    """Download the completed reporting agent output as a PDF."""
+    state = await _investigation_service.get_investigation(case_id, db)
+    if (
+        state is None
+        or state.current_stage != CurrentStage.DONE
+        or state.investigation_report is None
+        or state.investigation_report.status != AgentStatus.COMPLETED
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Completed report not found for investigation: {case_id}",
+        )
+
+    return Response(
+        content=render_investigation_report_pdf(case_id, state.investigation_report),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{case_id}-report.pdf"'},
     )
