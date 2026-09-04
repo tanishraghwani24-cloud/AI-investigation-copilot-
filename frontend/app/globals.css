@@ -142,3 +142,16 @@
     @apply font-sans;
   }
 }
+
+@keyframes gold-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-gold-spin {
+  animation: gold-spin 3s linear infinite;
+}

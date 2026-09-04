@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import { NAV_ITEMS } from "@/components/layout/navItems";
+import { SidebarNavLink } from "@/components/layout/SidebarNavLink";
 
 /**
  * The sidebar, collapsed for narrow viewports.
@@ -58,16 +59,9 @@ export function MobileNav() {
               </button>
             </div>
 
-            <nav className="flex-1 space-y-1 overflow-y-auto p-4">
+            <nav className="flex-1 space-y-1.5 overflow-y-auto p-4">
               {NAV_ITEMS.map((item) => (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  onClick={() => setOpen(false)}
-                  className="flex items-center rounded-md px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white"
-                >
-                  {item.label}
-                </Link>
+                <SidebarNavLink key={item.label} item={item} onNavigate={() => setOpen(false)} />
               ))}
             </nav>
           </div>
