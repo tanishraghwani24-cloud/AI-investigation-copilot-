@@ -19,7 +19,7 @@ export default function InvestigationLoading() {
         </div>
       </div>
 
-      <section className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+      <section className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-surface-dark">
         <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-4 dark:border-gray-800">
           <div className="h-9 w-9 rounded-lg bg-gray-200 dark:bg-gray-700" />
           <div className="h-6 w-32 rounded bg-gray-200 dark:bg-gray-700" />
@@ -40,7 +40,7 @@ export default function InvestigationLoading() {
       </section>
 
       {[1, 2, 3].map((i) => (
-        <section key={i} className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+        <section key={i} className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-surface-dark">
           <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-4 dark:border-gray-800">
             <div className="h-9 w-9 rounded-lg bg-gray-200 dark:bg-gray-700" />
             <div className="h-6 w-48 rounded bg-gray-200 dark:bg-gray-700" />

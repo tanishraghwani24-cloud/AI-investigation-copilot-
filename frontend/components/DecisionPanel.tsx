@@ -51,7 +51,7 @@ export function DecisionPanel({ data }: DecisionPanelProps) {
   const options = data?.decision_options ?? [];
 
   return (
-    <section className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900" aria-labelledby="decision-panel-title">
+    <section className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-surface-dark" aria-labelledby="decision-panel-title">
       <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-gray-800">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"><Scale className="h-5 w-5" /></div>

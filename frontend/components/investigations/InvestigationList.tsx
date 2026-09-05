@@ -77,7 +77,7 @@ export function InvestigationList() {
           <div className="mt-2 h-4 w-32 rounded bg-gray-100 dark:bg-gray-800" />
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-surface-dark">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50/80 dark:border-gray-800 dark:bg-gray-800/50">
@@ -159,7 +159,7 @@ export function InvestigationList() {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-surface-dark">
         <table className="w-full min-w-[44rem] text-left text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50/80 dark:border-gray-800 dark:bg-gray-800/50">

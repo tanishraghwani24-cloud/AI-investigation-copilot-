@@ -112,7 +112,7 @@ export default async function InvestigationDetailPage({ params }: PageProps) {
 
       <InvestigationPipeline investigation={investigation} />
 
-      <section className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+      <section className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-surface-dark">
         <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-4 dark:border-gray-800">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"><FileText className="h-5 w-5" /></div>
           <h3 className="text-base font-semibold text-gray-900 dark:text-white">Case Input</h3>
@@ -167,7 +167,7 @@ export default async function InvestigationDetailPage({ params }: PageProps) {
       {hasErrors && (
         <section className="rounded-xl border border-red-200 bg-red-50 px-6 py-4 dark:border-red-900 dark:bg-red-900/30">
           <h3 className="mb-2 text-sm font-semibold text-red-800 dark:text-red-200">Errors ({errors.length})</h3>
-          <div className="space-y-2">{errors.map((error, index) => <div key={`${error.agent_name}-${index}`} className="rounded-lg bg-white px-3 py-2 text-sm dark:bg-gray-900"><span className="font-medium text-red-700 dark:text-red-300">{error.agent_name}</span><span className="mx-1.5 text-gray-300 dark:text-gray-600">·</span><span className="text-gray-600 dark:text-gray-300">{error.message}</span></div>)}</div>
+          <div className="space-y-2">{errors.map((error, index) => <div key={`${error.agent_name}-${index}`} className="rounded-lg bg-white px-3 py-2 text-sm dark:bg-surface-dark"><span className="font-medium text-red-700 dark:text-red-300">{error.agent_name}</span><span className="mx-1.5 text-gray-300 dark:text-gray-600">·</span><span className="text-gray-600 dark:text-gray-300">{error.message}</span></div>)}</div>
         </section>
       )}
     </div>

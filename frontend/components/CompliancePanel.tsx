@@ -12,7 +12,7 @@ export function CompliancePanel({ data }: CompliancePanelProps) {
   const status = data?.status ?? AgentStatus.NOT_STARTED;
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+    <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-surface-dark">
       <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-gray-800">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300">

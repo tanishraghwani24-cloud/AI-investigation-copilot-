@@ -1,5 +1,18 @@
-import Link from "next/link";
+"use client";
+
 import type { LucideIcon } from "lucide-react";
+import { motion, type MotionProps } from "motion/react";
+import GlassmorphismCta from "@/components/ui/GlassmorphismCta";
+import {
+  Reveal,
+  WordsReveal,
+  blurIn,
+  revealFrom,
+  revealUp,
+  scaleIn,
+  stagger,
+  wipeIn,
+} from "@/components/landing/ScrollReveal";
 import {
   AlertTriangle,
   ArrowRight,
@@ -30,9 +43,12 @@ import {
 
 function SectionKicker({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-400">
+    <motion.p
+      className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-300"
+      {...wipeIn()}
+    >
       {children}
-    </p>
+    </motion.p>
   );
 }
 
@@ -49,16 +65,22 @@ function SectionHeading({
     <div className="relative mx-auto max-w-2xl text-center">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 top-0 -z-10 h-40 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-500/10 blur-3xl dark:bg-blue-500/20"
+        className="pointer-events-none absolute left-1/2 top-0 -z-10 h-40 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-r from-fuchsia-500/15 to-indigo-500/15 blur-3xl dark:from-fuchsia-500/25 dark:to-indigo-500/25"
       />
       <SectionKicker>{kicker}</SectionKicker>
-      <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-gray-900 sm:text-3xl dark:text-white">
+      <motion.h2
+        className="mt-2 text-2xl font-extrabold tracking-tight text-gray-900 sm:text-3xl dark:text-white"
+        {...blurIn(0.06)}
+      >
         {title}
-      </h2>
+      </motion.h2>
       {subtitle ? (
-        <p className="mt-3 text-sm text-gray-600 sm:text-base dark:text-gray-400">
+        <motion.p
+          className="mt-3 text-sm text-gray-600 sm:text-base dark:text-gray-400"
+          {...revealUp(0.14)}
+        >
           {subtitle}
-        </p>
+        </motion.p>
       ) : null}
     </div>
   );
@@ -68,21 +90,26 @@ function Card({
   icon: Icon,
   title,
   description,
+  ...motionProps
 }: {
   icon: LucideIcon;
   title: string;
   description: string;
-}) {
+} & MotionProps) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-colors hover:border-blue-300 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-blue-800">
-      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+    <motion.div
+      className="landing-card rounded-2xl border border-violet-100/90 bg-white/80 p-5 dark:border-violet-500/15 dark:bg-surface-dark/85"
+      whileHover={{ y: -12, scale: 1.02, rotateX: 5, rotateY: -4, transition: { duration: 0.34, ease: "easeOut" } }}
+      {...motionProps}
+    >
+      <div className="landing-card-icon flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-fuchsia-500 to-indigo-500 text-white shadow-lg shadow-fuchsia-500/20">
         <Icon className="h-5 w-5" strokeWidth={2} />
       </div>
       <h3 className="mt-4 text-sm font-semibold text-gray-900 dark:text-white">{title}</h3>
       <p className="mt-1.5 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
         {description}
       </p>
-    </div>
+    </motion.div>
   );
 }
 
@@ -195,14 +222,17 @@ function OverviewSection() {
     <section className="py-16 sm:py-24">
       <div className="mx-auto max-w-3xl px-4 text-center">
         <SectionKicker>ARIA · Autonomous Risk Investigation Agent</SectionKicker>
-        <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl dark:text-white">
+        <motion.h2
+          className="mt-2 text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl dark:text-white"
+          {...blurIn(0.06)}
+        >
           From Risk Signal to Defensible Decision.
-        </h2>
-        <p className="mt-4 text-base leading-relaxed text-gray-600 sm:text-lg dark:text-gray-400">
-          ARIA brings risk signals, investigation context, investigator activity, decisions,
-          and audit history into one structured workflow — an investigation operating layer,
-          not another fraud dashboard.
-        </p>
+        </motion.h2>
+        <WordsReveal
+          className="mt-4 text-base leading-relaxed text-gray-600 sm:text-lg dark:text-gray-400"
+          delay={0.16}
+          text="ARIA brings risk signals, investigation context, investigator activity, decisions, and audit history into one structured workflow — an investigation operating layer, not another fraud dashboard."
+        />
       </div>
     </section>
   );
@@ -210,23 +240,25 @@ function OverviewSection() {
 
 function WorkflowSection() {
   return (
-    <section className="-mx-4 bg-gray-50 px-4 py-16 sm:-mx-6 sm:px-6 sm:py-24 dark:bg-gray-900/40">
+    <section className="-mx-4 bg-violet-50/55 px-4 py-16 sm:-mx-6 sm:px-6 sm:py-24 dark:bg-surface-dark/40">
       <SectionHeading
         kicker="How ARIA Works"
         title="One workflow, from signal to accountability."
         subtitle="Every investigation moves through the same structured sequence."
       />
-      <div className="mx-auto mt-12 grid max-w-6xl grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
+      <div className="landing-card-grid mx-auto mt-12 grid max-w-6xl grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
         {WORKFLOW_STEPS.map((step, index) => (
-          <div
+          <motion.div
             key={step.title}
-            className="relative rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900"
+            className="landing-card relative rounded-2xl border border-violet-100/90 bg-white/80 p-4 dark:border-violet-500/15 dark:bg-surface-dark/85"
+            whileHover={{ y: -12, scale: 1.025, rotateX: 5, rotateY: -5, transition: { duration: 0.34, ease: "easeOut" } }}
+            {...revealUp(stagger(index))}
           >
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+              <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-300">
                 {String(index + 1).padStart(2, "0")}
               </span>
-              <step.icon className="h-4 w-4 text-blue-600 dark:text-blue-400" strokeWidth={2} />
+              <step.icon className="h-4 w-4 text-fuchsia-600 dark:text-fuchsia-300" strokeWidth={2} />
             </div>
             <h3 className="mt-3 text-sm font-semibold text-gray-900 dark:text-white">
               {step.title}
@@ -240,7 +272,7 @@ function WorkflowSection() {
                 className="absolute -right-3 top-1/2 hidden h-4 w-4 -translate-y-1/2 text-gray-300 lg:block dark:text-gray-700"
               />
             ) : null}
-          </div>
+          </motion.div>
         ))}
       </div>
     </section>
@@ -254,9 +286,9 @@ function CapabilitiesSection() {
         kicker="Core Capabilities"
         title="Built around the investigation, not just the alert."
       />
-      <div className="mx-auto mt-12 grid max-w-6xl grid-cols-1 gap-4 px-4 sm:grid-cols-2 lg:grid-cols-3">
-        {CAPABILITIES.map((item) => (
-          <Card key={item.title} {...item} />
+      <div className="landing-card-grid mx-auto mt-12 grid max-w-6xl grid-cols-1 gap-4 px-4 sm:grid-cols-2 lg:grid-cols-3">
+        {CAPABILITIES.map((item, index) => (
+          <Card key={item.title} {...item} {...scaleIn(stagger(index))} />
         ))}
       </div>
     </section>
@@ -265,14 +297,18 @@ function CapabilitiesSection() {
 
 function CollaborationSection() {
   return (
-    <section className="-mx-4 bg-gray-50 px-4 py-16 sm:-mx-6 sm:px-6 sm:py-24 dark:bg-gray-900/40">
+    <section className="-mx-4 bg-violet-50/55 px-4 py-16 sm:-mx-6 sm:px-6 sm:py-24 dark:bg-surface-dark/40">
       <SectionHeading
         kicker="Collaborative Investigations"
         title="Know who is working on what."
         subtitle="Investigation ownership and current activity, visible across the team — not isolated investigator screens."
       />
       <div className="mx-auto mt-12 grid max-w-4xl grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+        <motion.div
+          className="landing-card rounded-2xl border border-violet-100/90 bg-white/80 p-5 dark:border-violet-500/15 dark:bg-surface-dark/85"
+          whileHover={{ y: -8, rotateX: 2, rotateY: -2, transition: { duration: 0.32, ease: "easeOut" } }}
+          {...revealFrom("left")}
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">CASE-A104</span>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-800">
@@ -286,8 +322,12 @@ function CollaborationSection() {
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
             Currently examining transaction context and evidence.
           </p>
-        </div>
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+        </motion.div>
+        <motion.div
+          className="landing-card rounded-2xl border border-violet-100/90 bg-white/80 p-5 dark:border-violet-500/15 dark:bg-surface-dark/85"
+          whileHover={{ y: -8, rotateX: 2, rotateY: 2, transition: { duration: 0.32, ease: "easeOut" } }}
+          {...revealFrom("right", 0.08)}
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">CASE-B217</span>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700">
@@ -301,20 +341,22 @@ function CollaborationSection() {
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
             A separate case, worked independently in parallel.
           </p>
-        </div>
+        </motion.div>
       </div>
       <ul className="mx-auto mt-8 grid max-w-4xl grid-cols-1 gap-3 sm:grid-cols-3">
         {[
           "Clear ownership for every investigation",
           "Live activity, not just a historical log",
           "No duplicated work, easier handoffs",
-        ].map((line) => (
-          <li
+        ].map((line, index) => (
+          <motion.li
             key={line}
-            className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-center text-xs font-medium text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300"
+            className="landing-card rounded-xl border border-violet-100/90 bg-white/80 px-4 py-3 text-center text-xs font-medium text-gray-700 dark:border-violet-500/15 dark:bg-surface-dark/85 dark:text-gray-300"
+            whileHover={{ y: -5, rotateX: 1, transition: { duration: 0.3, ease: "easeOut" } }}
+            {...wipeIn(stagger(index))}
           >
             {line}
-          </li>
+          </motion.li>
         ))}
       </ul>
     </section>
@@ -327,15 +369,17 @@ function DecisionIntelligenceSection() {
       <div className="mx-auto grid max-w-5xl grid-cols-1 gap-10 px-4 sm:grid-cols-2 sm:items-center">
         <div>
           <SectionKicker>Decision Intelligence</SectionKicker>
-          <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-gray-900 sm:text-3xl dark:text-white">
+          <motion.h2
+            className="mt-2 text-2xl font-extrabold tracking-tight text-gray-900 sm:text-3xl dark:text-white"
+            {...blurIn(0.06)}
+          >
             Beyond a risk score.
-          </h2>
-          <p className="mt-4 text-sm leading-relaxed text-gray-600 sm:text-base dark:text-gray-400">
-            A number alone does not explain an investigation. ARIA connects risk context,
-            evidence, and investigator actions — moving from &ldquo;something looks
-            suspicious&rdquo; to a structured, defensible decision, with a human investigator
-            still at the center of it.
-          </p>
+          </motion.h2>
+          <WordsReveal
+            className="mt-4 text-sm leading-relaxed text-gray-600 sm:text-base dark:text-gray-400"
+            delay={0.16}
+            text="A number alone does not explain an investigation. ARIA connects risk context, evidence, and investigator actions — moving from “something looks suspicious” to a structured, defensible decision, with a human investigator still at the center of it."
+          />
         </div>
         <ul className="space-y-3">
           {[
@@ -343,14 +387,16 @@ function DecisionIntelligenceSection() {
             "Investigation context explains what is happening",
             "Evidence and transaction context support the case",
             "The final outcome remains traceable",
-          ].map((line) => (
-            <li
+          ].map((line, index) => (
+            <motion.li
               key={line}
-              className="flex items-start gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300"
+              className="landing-card flex items-start gap-3 rounded-xl border border-violet-100/90 bg-white/80 px-4 py-3 text-sm text-gray-700 dark:border-violet-500/15 dark:bg-surface-dark/85 dark:text-gray-300"
+              whileHover={{ x: 6, y: -3, rotateX: 1, transition: { duration: 0.3, ease: "easeOut" } }}
+              {...revealFrom("right", stagger(index))}
             >
-              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gradient-to-br from-fuchsia-500 to-indigo-500" />
               {line}
-            </li>
+            </motion.li>
           ))}
         </ul>
       </div>
@@ -360,21 +406,25 @@ function DecisionIntelligenceSection() {
 
 function SecuritySection() {
   return (
-    <section className="-mx-4 bg-gray-50 px-4 py-16 sm:-mx-6 sm:px-6 sm:py-24 dark:bg-gray-900/40">
+    <section className="-mx-4 bg-violet-50/55 px-4 py-16 sm:-mx-6 sm:px-6 sm:py-24 dark:bg-surface-dark/40">
       <SectionHeading
         kicker="Security & Trust"
         title="Protected by design. Traceable by default."
       />
       <div className="mx-auto mt-12 grid max-w-5xl grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {SECURITY_CONTROLS.map((item) => (
-          <Card key={item.title} {...item} />
+        {SECURITY_CONTROLS.map((item, index) => (
+          <Card key={item.title} {...item} {...revealUp(stagger(index))} />
         ))}
       </div>
-      <p className="mx-auto mt-8 max-w-2xl rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 text-center text-sm text-blue-900 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+      <motion.p
+        className="landing-card mx-auto mt-8 max-w-2xl rounded-xl border border-violet-200 bg-gradient-to-r from-fuchsia-50/80 to-indigo-50/80 px-5 py-4 text-center text-sm text-indigo-900 dark:border-violet-500/30 dark:from-fuchsia-950/30 dark:to-indigo-950/30 dark:text-indigo-200"
+        whileHover={{ y: -5, rotateX: 1, transition: { duration: 0.3, ease: "easeOut" } }}
+        {...scaleIn()}
+      >
         Authentication, rate limiting, and restricted origins guard the API boundary. Secrets
         stay server-side, credentials can rotate, and the platform audit log keeps every
         important action traceable.
-      </p>
+      </motion.p>
     </section>
   );
 }
@@ -388,36 +438,47 @@ function CrossBankSection() {
         subtitle="ARIA works from the data legitimately available to the investigating institution — it does not assume privileged access to another bank's internal systems."
       />
       <div className="mx-auto mt-12 flex max-w-3xl flex-col items-center gap-4 px-4 sm:flex-row sm:justify-center">
-        <div className="flex w-full flex-col items-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-6 py-5 text-center sm:w-56 dark:border-blue-900 dark:bg-blue-950/40">
-          <Building2 className="h-6 w-6 text-blue-600 dark:text-blue-400" strokeWidth={2} />
+        <motion.div
+          className="landing-card flex w-full flex-col items-center gap-2 rounded-2xl border border-violet-200 bg-gradient-to-br from-fuchsia-50/80 to-indigo-50/80 px-6 py-5 text-center sm:w-56 dark:border-violet-500/30 dark:from-fuchsia-950/30 dark:to-indigo-950/30"
+          whileHover={{ y: -7, rotateX: 2, rotateY: -2, transition: { duration: 0.32, ease: "easeOut" } }}
+          {...scaleIn()}
+        >
+          <Building2 className="h-6 w-6 text-fuchsia-600 dark:text-fuchsia-300" strokeWidth={2} />
           <p className="text-sm font-semibold text-gray-900 dark:text-white">
             Investigating Institution
           </p>
           <p className="text-xs text-gray-600 dark:text-gray-400">Full context available</p>
-        </div>
+        </motion.div>
         <ArrowRight
           aria-hidden="true"
           className="h-5 w-5 shrink-0 rotate-90 text-gray-400 sm:rotate-0 dark:text-gray-600"
         />
-        <div className="flex w-full flex-col items-center gap-2 rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-5 text-center sm:w-56 dark:border-gray-700 dark:bg-gray-900">
+        <motion.div
+          className="landing-card flex w-full flex-col items-center gap-2 rounded-2xl border border-dashed border-violet-200 bg-white/80 px-6 py-5 text-center sm:w-56 dark:border-violet-500/25 dark:bg-surface-dark/85"
+          whileHover={{ y: -7, rotateX: 2, rotateY: 2, transition: { duration: 0.32, ease: "easeOut" } }}
+          {...scaleIn(0.12)}
+        >
           <Building2 className="h-6 w-6 text-gray-400 dark:text-gray-500" strokeWidth={2} />
           <p className="text-sm font-semibold text-gray-900 dark:text-white">
             External Counterparty
           </p>
           <p className="text-xs text-gray-600 dark:text-gray-400">Not directly integrated</p>
-        </div>
+        </motion.div>
       </div>
-      <p className="mx-auto mt-6 max-w-xl px-4 text-center text-xs text-gray-500 dark:text-gray-500">
+      <motion.p
+        className="mx-auto mt-6 max-w-xl px-4 text-center text-xs text-gray-500 dark:text-gray-500"
+        {...revealUp(0.05)}
+      >
         The investigation still proceeds using information available on the investigating side,
         with external-counterparty context represented — not fabricated.
-      </p>
+      </motion.p>
     </section>
   );
 }
 
 function ReportsSection() {
   return (
-    <section className="-mx-4 bg-gray-50 px-4 py-16 sm:-mx-6 sm:px-6 sm:py-24 dark:bg-gray-900/40">
+    <section className="-mx-4 bg-violet-50/55 px-4 py-16 sm:-mx-6 sm:px-6 sm:py-24 dark:bg-surface-dark/40">
       <SectionHeading
         kicker="Reports"
         title="From individual cases to organizational visibility."
@@ -429,14 +490,16 @@ function ReportsSection() {
           "Operational investigation visibility",
           "Risk trend concepts",
           "Management-level activity visibility",
-        ].map((line) => (
-          <li
+        ].map((line, index) => (
+          <motion.li
             key={line}
-            className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300"
+            className="landing-card flex items-center gap-3 rounded-xl border border-violet-100/90 bg-white/80 px-4 py-3 text-sm text-gray-700 dark:border-violet-500/15 dark:bg-surface-dark/85 dark:text-gray-300"
+            whileHover={{ x: 6, y: -3, rotateX: 1, transition: { duration: 0.3, ease: "easeOut" } }}
+            {...revealUp(stagger(index))}
           >
-            <FileBarChart className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" strokeWidth={2} />
+            <FileBarChart className="h-4 w-4 shrink-0 text-fuchsia-600 dark:text-fuchsia-300" strokeWidth={2} />
             {line}
-          </li>
+          </motion.li>
         ))}
       </ul>
     </section>
@@ -446,23 +509,30 @@ function ReportsSection() {
 function ClosingCtaSection() {
   return (
     <section className="py-16 sm:py-24">
-      <div className="relative mx-auto max-w-2xl overflow-hidden rounded-3xl border border-gray-200 bg-white px-6 py-12 text-center dark:border-gray-800 dark:bg-gray-900">
+      <div className="landing-card relative mx-auto max-w-2xl overflow-hidden rounded-3xl border border-violet-200 bg-white/85 px-6 py-12 text-center dark:border-violet-500/20 dark:bg-surface-dark/90">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute left-1/2 top-0 h-40 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-500/10 blur-3xl dark:bg-blue-500/20"
+          className="pointer-events-none absolute left-1/2 top-0 h-40 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-r from-fuchsia-500/20 to-indigo-500/20 blur-3xl dark:from-fuchsia-500/30 dark:to-indigo-500/30"
         />
-        <h2 className="text-2xl font-extrabold tracking-tight text-gray-900 sm:text-3xl dark:text-white">
-          Investigate smarter. Collaborate faster.
-        </h2>
-        <p className="mt-3 text-sm text-gray-600 sm:text-base dark:text-gray-400">
-          Keep every decision traceable, from the first risk signal to the final outcome.
-        </p>
-        <Link
-          href="/officer"
-          className="mt-6 inline-block rounded-lg bg-blue-600 px-6 py-3 font-medium text-white transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
+        <motion.h2
+          className="text-2xl font-extrabold tracking-tight text-gray-900 sm:text-3xl dark:text-white"
+          {...blurIn()}
         >
-          Go to Officer Inbox
-        </Link>
+          Investigate smarter. Collaborate faster.
+        </motion.h2>
+        <motion.p
+          className="mt-3 text-sm text-gray-600 sm:text-base dark:text-gray-400"
+          {...revealUp(0.1)}
+        >
+          Keep every decision traceable, from the first risk signal to the final outcome.
+        </motion.p>
+        <Reveal variant="scale" delay={0.2}>
+          <GlassmorphismCta
+            href="/officer"
+            label="Go to Officer Inbox"
+            className="mt-6"
+          />
+        </Reveal>
       </div>
     </section>
   );
@@ -470,16 +540,21 @@ function ClosingCtaSection() {
 
 export default function LandingSections() {
   return (
-    <div className="w-full text-left">
-      <OverviewSection />
-      <WorkflowSection />
-      <CapabilitiesSection />
-      <CollaborationSection />
-      <DecisionIntelligenceSection />
-      <SecuritySection />
-      <CrossBankSection />
-      <ReportsSection />
-      <ClosingCtaSection />
+    <div className="landing-shell relative isolate w-full overflow-hidden text-left">
+      <div aria-hidden="true" className="landing-glow landing-glow-one" />
+      <div aria-hidden="true" className="landing-glow landing-glow-two" />
+      <div aria-hidden="true" className="landing-glow landing-glow-three" />
+      <div className="relative z-10">
+        <OverviewSection />
+        <WorkflowSection />
+        <CapabilitiesSection />
+        <CollaborationSection />
+        <DecisionIntelligenceSection />
+        <SecuritySection />
+        <CrossBankSection />
+        <ReportsSection />
+        <ClosingCtaSection />
+      </div>
     </div>
   );
 }

@@ -1,11 +1,23 @@
-import Link from "next/link";
 import MagnifyLens from "@/components/MagnifyLens";
 import MagicRings from "@/components/ui/MagicRings";
 import LandingSections from "@/components/landing/LandingSections";
+import GlassmorphismCta from "@/components/ui/GlassmorphismCta";
+import { Reveal } from "@/components/landing/ScrollReveal";
+
+/**
+ * Marks the document as able to run the scroll reveals, which lets the
+ * `.reveal-ready [data-reveal]` rule in globals.css hide them from the very
+ * first paint instead of letting the prerendered text flash in before Motion
+ * mounts. Inline and above the sections so it runs while the HTML below is
+ * still being parsed; if scripting is off the class is never added and every
+ * reveal simply stays visible.
+ */
+const REVEAL_INIT_SCRIPT = `document.documentElement.classList.add('reveal-ready');`;
 
 export default function Home() {
   return (
     <div className="w-full">
+      <script dangerouslySetInnerHTML={{ __html: REVEAL_INIT_SCRIPT }} />
       <div className="relative flex w-full flex-col items-center justify-center min-h-[60vh] overflow-hidden px-2 text-center">
         {/*
           Decorative background layer. `hidden sm:block` keeps it off the
@@ -46,15 +58,16 @@ export default function Home() {
 
         <div className="relative z-10 flex flex-col items-center">
           <MagnifyLens />
-          <p className="text-base sm:text-lg text-gray-600 mb-8 max-w-2xl dark:text-gray-300">
-            Fraud Investigation & Decision Intelligence Platform
-          </p>
-          <Link
-            href="/officer"
-            className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors dark:bg-blue-500 dark:hover:bg-blue-400"
+          <Reveal
+            as="p"
+            variant="up"
+            className="text-base sm:text-lg text-gray-600 mb-8 max-w-2xl dark:text-gray-300"
           >
-            Go to Officer Inbox
-          </Link>
+            Fraud Investigation & Decision Intelligence Platform
+          </Reveal>
+          <Reveal variant="scale" delay={0.18}>
+            <GlassmorphismCta href="/officer" label="Go to Officer Inbox" />
+          </Reveal>
         </div>
       </div>
 

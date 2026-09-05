@@ -7,6 +7,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface-dark: #0a0a0a;
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-sans);
@@ -154,4 +155,246 @@
 
 .animate-gold-spin {
   animation: gold-spin 3s linear infinite;
+}
+
+/*
+ * Landing-page scroll reveals (components/landing/ScrollReveal.tsx) tag every
+ * animated element with data-reveal. Pinning them to their finished state here
+ * — rather than via useReducedMotion() — means reduced-motion users never see
+ * the pre-animation state at all, including before hydration, and covers every
+ * property the reveals touch (blur and clip-path included). Author !important
+ * is the one case that outranks the inline styles Motion writes.
+ */
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+    clip-path: none !important;
+  }
+}
+
+/*
+ * Next's prerender emits these elements without Motion's `initial` styles, so
+ * the static HTML would paint the text fully visible and then snap to hidden
+ * the moment Motion mounts. Hiding them from the first paint removes that
+ * flash. It is gated on `.reveal-ready`, which the landing page sets via an
+ * inline script, so the text stays visible when JS never runs rather than
+ * being permanently hidden. Motion's own inline opacity (an inline style)
+ * outranks this rule as soon as it animates each element in.
+ */
+.reveal-ready [data-reveal] {
+  opacity: 0;
+}
+
+/* Landing-page visual language comes from the hero's #a855f7 → #6366f1 gradient. */
+.landing-shell {
+  background:
+    radial-gradient(circle at 12% 18%, rgb(168 85 247 / 0.09), transparent 22rem),
+    radial-gradient(circle at 88% 50%, rgb(99 102 241 / 0.08), transparent 26rem);
+}
+
+.landing-glow {
+  position: absolute;
+  z-index: 0;
+  width: 16rem;
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  pointer-events: none;
+  filter: blur(52px);
+  opacity: 0.34;
+  background: linear-gradient(135deg, #a855f7, #6366f1);
+  animation: landing-glow-drift 14s ease-in-out infinite alternate;
+}
+
+.landing-glow-one { top: 8%; left: -9rem; }
+.landing-glow-two { top: 43%; right: -10rem; width: 20rem; animation-delay: -5s; }
+.landing-glow-three { bottom: 7%; left: 22%; width: 13rem; animation-delay: -9s; }
+
+@keyframes landing-glow-drift {
+  from { transform: translate3d(0, 0, 0) scale(0.92); }
+  to { transform: translate3d(1.5rem, -1.25rem, 0) scale(1.08); }
+}
+
+.landing-card {
+  position: relative;
+  overflow: hidden;
+  transform-style: preserve-3d;
+  will-change: transform;
+  box-shadow: 0 10px 28px rgb(76 29 149 / 0.09), 0 2px 5px rgb(15 23 42 / 0.05), inset 0 1px 0 rgb(255 255 255 / 0.8);
+  transition: border-color 340ms ease, box-shadow 340ms ease, background-color 340ms ease;
+}
+
+.landing-card-grid {
+  perspective: 1200px;
+}
+
+.landing-card::after {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  content: "";
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(115deg, transparent 20%, rgb(255 255 255 / 0.16) 48%, transparent 72%);
+  transform: translateX(-125%);
+  transition: opacity 340ms ease, transform 620ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.landing-card:hover {
+  border-color: rgb(168 85 247 / 0.5);
+  box-shadow: 0 30px 54px rgb(99 102 241 / 0.22), 0 12px 24px rgb(168 85 247 / 0.16), inset 0 1px 0 rgb(255 255 255 / 0.9);
+}
+
+.landing-card:hover::after {
+  opacity: 1;
+  transform: translateX(125%);
+}
+
+.landing-card-icon { transform: translateZ(16px); }
+
+.dark .landing-card {
+  box-shadow: 0 12px 30px rgb(0 0 0 / 0.28), inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+
+.dark .landing-card:hover {
+  border-color: rgb(196 181 253 / 0.45);
+  box-shadow: 0 30px 58px rgb(76 29 149 / 0.45), 0 12px 28px rgb(0 0 0 / 0.38), inset 0 1px 0 rgb(255 255 255 / 0.1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-glow { animation: none; }
+  .landing-card { transition: none; }
+}
+
+/*
+ * GlassmorphismCta (components/ui/GlassmorphismCta.tsx) references these two
+ * animation names via Tailwind arbitrary properties, but the pasted 21st.dev
+ * snippet didn't include their keyframes — defined here instead.
+ */
+@keyframes rotate-gradient {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes borderBeamRotation {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+/*
+ * GlassButton (components/ui/glass-button.tsx) only supplies structure and
+ * sizing utilities via cva — the frosted-glass look itself lives here so it
+ * can be themed per usage (e.g. .glass-button-danger below) without editing
+ * the shared component. Neutral by default; light/dark handled explicitly
+ * since this predates the app's oklch design-token palette.
+ */
+.glass-button-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.glass-button {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.25));
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -6px 12px -8px rgba(0, 0, 0, 0.25),
+    0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.glass-button:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.35));
+}
+
+.glass-button:active {
+  transform: translateY(0.5px) scale(0.99);
+}
+
+.glass-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.glass-button:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.6);
+  outline-offset: 2px;
+}
+
+.glass-button-shadow {
+  position: absolute;
+  inset: 3px 6px -6px 6px;
+  z-index: 0;
+  border-radius: inherit;
+  background: rgba(0, 0, 0, 0.18);
+  filter: blur(10px);
+}
+
+.dark .glass-button {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    inset 0 -6px 12px -8px rgba(0, 0, 0, 0.5),
+    0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.dark .glass-button:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08));
+}
+
+.dark .glass-button-shadow {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* Urgent/danger tint — used by the Officer Inbox "Investigate" action so the
+   button still reads as the same red call-to-action, just frosted-glass. */
+.glass-button-danger .glass-button {
+  border-color: rgba(248, 113, 113, 0.55);
+  background: linear-gradient(180deg, rgba(248, 113, 113, 0.55), rgba(220, 38, 38, 0.35));
+  color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -6px 12px -8px rgba(127, 29, 29, 0.6),
+    0 1px 3px rgba(127, 29, 29, 0.3);
+}
+
+.glass-button-danger .glass-button:hover {
+  background: linear-gradient(180deg, rgba(248, 113, 113, 0.68), rgba(220, 38, 38, 0.48));
+}
+
+.glass-button-danger .glass-button-shadow {
+  background: rgba(220, 38, 38, 0.35);
+}
+
+.dark .glass-button-danger .glass-button {
+  border-color: rgba(248, 113, 113, 0.4);
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.45), rgba(153, 27, 27, 0.4));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -6px 12px -8px rgba(0, 0, 0, 0.6),
+    0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.dark .glass-button-danger .glass-button:hover {
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.58), rgba(153, 27, 27, 0.52));
+}
+
+.dark .glass-button-danger .glass-button-shadow {
+  background: rgba(153, 27, 27, 0.5);
 }

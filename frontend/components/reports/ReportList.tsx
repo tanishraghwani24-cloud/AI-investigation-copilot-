@@ -4,12 +4,49 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Download, FileText } from "lucide-react";
 import { RiskScoreBadge } from "@/components/investigations/RiskScoreBadge";
+import { useToast } from "@/components/ui/ToastProvider";
 import { listReports } from "@/services/reportService";
 import type { ReportListItem } from "@/services/reportService";
 
 const formatDate = (value: string) => new Date(value).toLocaleString();
 
+function ReportListSkeleton() {
+  return (
+    <div className="animate-pulse">
+      <div className="mb-6">
+        <div className="h-8 w-32 rounded bg-gray-200 dark:bg-gray-700" />
+        <div className="mt-2 h-4 w-64 rounded bg-gray-100 dark:bg-gray-800" />
+      </div>
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-surface-dark">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-gray-200 bg-gray-50/80 dark:border-gray-800 dark:bg-gray-800/50">
+              {["w-24", "w-24", "w-16", "w-32", "w-20", "w-20", "w-20"].map((w, i) => (
+                <th key={i} className="px-6 py-4">
+                  <div className={`h-4 ${w} rounded bg-gray-200 dark:bg-gray-700`} />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+            {[1, 2, 3, 4].map((row) => (
+              <tr key={row}>
+                {["w-20", "w-28", "w-16", "w-24", "w-24", "w-24", "w-20"].map((w, i) => (
+                  <td key={i} className="px-6 py-4">
+                    <div className={`h-4 ${w} rounded bg-gray-100 dark:bg-gray-800`} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export function ReportList() {
+  const { showToast } = useToast();
   const [reports, setReports] = useState<ReportListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,12 +83,15 @@ export function ReportList() {
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
+      showToast(`Report for ${caseId} downloaded`, "success");
     } catch (reason) {
-      setDownloadError(reason instanceof Error ? reason.message : "Unable to download the PDF report.");
+      const message = reason instanceof Error ? reason.message : "Unable to download the PDF report.";
+      setDownloadError(message);
+      showToast(message, "error");
     } finally {
       setDownloadingCaseId(null);
     }
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     const initialLoad = window.setTimeout(() => void loadReports(), 0);
@@ -63,7 +103,7 @@ export function ReportList() {
   }, [loadReports]);
 
   if (loading) {
-    return <p className="text-sm text-gray-500 dark:text-gray-400">Loading completed investigation reports…</p>;
+    return <ReportListSkeleton />;
   }
 
   if (error) {
@@ -85,13 +125,13 @@ export function ReportList() {
       </div>
 
       {reports.length === 0 ? (
-        <div className="rounded-xl border border-gray-200 bg-white px-4 py-12 text-center shadow-sm sm:px-6 dark:border-gray-800 dark:bg-gray-900">
+        <div className="rounded-xl border border-gray-200 bg-white px-4 py-12 text-center shadow-sm sm:px-6 dark:border-gray-800 dark:bg-surface-dark">
           <FileText className="mx-auto h-8 w-8 text-gray-400 dark:text-gray-500" />
           <h2 className="mt-3 text-sm font-semibold text-gray-900 dark:text-gray-100">No completed reports yet</h2>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Reports appear here when an investigation reaches DONE.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-surface-dark">
           <table className="w-full min-w-[56rem] text-left text-sm">
             <thead><tr className="border-b border-gray-200 bg-gray-50/80 dark:border-gray-800 dark:bg-gray-800/50">
               <th className="px-6 py-3 font-semibold text-gray-600">Case ID</th><th className="px-6 py-3 font-semibold text-gray-600">Customer</th><th className="px-6 py-3 font-semibold text-gray-600">Risk score</th><th className="px-6 py-3 font-semibold text-gray-600">Recommendation</th><th className="px-6 py-3 font-semibold text-gray-600">Created</th><th className="px-6 py-3 font-semibold text-gray-600">Updated</th><th className="px-6 py-3 text-right font-semibold text-gray-600"><span className="sr-only">Download</span></th>

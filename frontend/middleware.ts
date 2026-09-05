@@ -35,10 +35,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // The response is created up front so Supabase can write refreshed session
-  // cookies onto it while the token is being validated.
-  const response = NextResponse.next({ request });
-  const supabase = getMiddlewareSupabase(request, response);
+  // getMiddlewareSupabase mirrors any refreshed cookies onto `request` as well
+  // as the response, so getResponse() reflects the rebuilt request and the
+  // route handler downstream sees the same (possibly just-refreshed) session
+  // this call validates.
+  const { supabase, getResponse } = getMiddlewareSupabase(request);
 
   // getUser() revalidates against Supabase rather than trusting the cookie's
   // contents, so a forged or expired cookie cannot pass this gate.
@@ -59,7 +60,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(login);
   }
 
-  return response;
+  return getResponse();
 }
 
 export const config = {

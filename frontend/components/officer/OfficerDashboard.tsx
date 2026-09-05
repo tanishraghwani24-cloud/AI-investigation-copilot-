@@ -13,6 +13,8 @@ import {
 } from "@/services/api";
 import { useInvestigator } from "@/components/auth/InvestigatorProvider";
 import { InvestigatorAvatarGroup } from "@/components/investigators/InvestigatorAvatar";
+import { useToast } from "@/components/ui/ToastProvider";
+import { GlassButton } from "@/components/ui/glass-button";
 import type { Investigator } from "@/types";
 
 /**
@@ -80,9 +82,29 @@ function formatAmount(amount?: number | null, currency?: string | null) {
   return `${amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} ${currency ?? "USD"}`;
 }
 
+function AlertQueueSkeleton() {
+  return (
+    <div className="animate-pulse space-y-2" aria-hidden="true">
+      {[1, 2, 3, 4].map((i) => (
+        <div key={i} className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-surface-dark">
+          <div className="flex items-start justify-between gap-2">
+            <div className="h-4 w-32 rounded bg-gray-200 dark:bg-gray-700" />
+            <div className="h-4 w-14 rounded-full bg-gray-200 dark:bg-gray-700" />
+          </div>
+          <div className="mt-2 h-3 w-full rounded bg-gray-100 dark:bg-gray-800" />
+          <div className="mt-1 h-3 w-2/3 rounded bg-gray-100 dark:bg-gray-800" />
+          <div className="mt-3 h-8 w-full rounded-lg bg-gray-100 dark:bg-gray-800" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function OfficerDashboard() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [alerts, setAlerts] = useState<BankAlert[]>([]);
+  const [alertsLoading, setAlertsLoading] = useState(true);
   const [selected, setSelected] = useState<BankAlert | null>(null);
   const [customer, setCustomer] = useState<MockCustomer | null>(null);
   const [transactions, setTransactions] = useState<MockTransaction[]>([]);
@@ -99,6 +121,8 @@ export function OfficerDashboard() {
       setAlerts(sortAlertsBySeverity(await listAlertsRequest("OPEN")));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load alerts");
+    } finally {
+      setAlertsLoading(false);
     }
     // Presence rides the existing alert poll rather than adding a socket. It is
     // a signed-in-only view and its failure must never break the alert queue,
@@ -174,6 +198,7 @@ export function OfficerDashboard() {
       // The backend has marked the alert INVESTIGATING; drop it from the
       // actionable queue immediately rather than waiting for the next poll.
       setAlerts((current) => current.filter((a) => a.alert_id !== alert.alert_id));
+      showToast(`Investigation started for ${alert.customer_name ?? alert.account_id}`, "success");
       router.push(`/investigations/${result.case_id}`);
     } catch (err: unknown) {
       // 409 means a colleague already holds this case. Refresh so their avatar
@@ -187,7 +212,7 @@ export function OfficerDashboard() {
   return (
     <div className="flex h-full flex-col gap-4 md:flex-row md:gap-6">
       {/* Alert queue — full width on small screens, a side rail from md up */}
-      <div className="flex max-h-[65vh] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm md:max-h-none md:w-1/3 dark:border-gray-800 dark:bg-gray-900">
+      <div className="flex max-h-[65vh] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm md:max-h-none md:w-1/3 dark:border-gray-800 dark:bg-surface-dark">
         <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-800/50">
           <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Incoming Alerts</h2>
           {/* Derived from the queue itself, so it falls as alerts are picked up
@@ -198,7 +223,9 @@ export function OfficerDashboard() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-2" data-testid="alert-queue">
-          {alerts.length === 0 ? (
+          {alertsLoading ? (
+            <AlertQueueSkeleton />
+          ) : alerts.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center p-6 text-center text-gray-500 dark:text-gray-400">
               <Inbox className="mb-3 h-10 w-10 text-gray-300 dark:text-gray-600" />
               <p className="text-sm">No open alerts.</p>
@@ -213,7 +240,7 @@ export function OfficerDashboard() {
                 className={`mb-2 rounded-lg border p-4 transition-colors ${
                   selected?.alert_id === alert.alert_id
                     ? "border-blue-200 bg-blue-50 ring-1 ring-blue-500 dark:border-blue-800 dark:bg-blue-900/30 dark:ring-blue-500"
-                    : "border-gray-200 bg-white hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800/60"
+                    : "border-gray-200 bg-white hover:bg-gray-50 dark:border-gray-800 dark:bg-surface-dark dark:hover:bg-gray-800/60"
                 }`}
               >
                 <button
@@ -252,11 +279,13 @@ export function OfficerDashboard() {
                     Investigation in progress
                   </p>
                 ) : (
-                <button
+                <GlassButton
                   type="button"
+                  size="sm"
                   onClick={() => void investigate(alert)}
                   disabled={investigatingId !== null}
-                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="glass-button-danger mt-3 w-full [&>.glass-button]:w-full"
+                  contentClassName="flex items-center justify-center gap-2"
                 >
                   {investigatingId === alert.alert_id ? (
                     <>
@@ -269,7 +298,7 @@ export function OfficerDashboard() {
                       Investigate
                     </>
                   )}
-                </button>
+                </GlassButton>
                 )}
               </div>
             ))
@@ -278,7 +307,7 @@ export function OfficerDashboard() {
       </div>
 
       {/* Alert detail */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6 dark:border-gray-800 dark:bg-gray-900">
+      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6 dark:border-gray-800 dark:bg-surface-dark">
         {error && (
           <div role="alert" className="mb-4 rounded-lg bg-red-50 p-4 text-red-600 dark:bg-red-900/30 dark:text-red-300">
             {error}

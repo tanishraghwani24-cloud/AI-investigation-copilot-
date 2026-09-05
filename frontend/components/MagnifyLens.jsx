@@ -109,6 +109,11 @@ export default function MagnifyLens() {
 
     const rimMask = `radial-gradient(circle ${LENS_RADIUS}px at ${pos.x}px ${pos.y}px, transparent 0%, transparent 50%, rgba(0,0,0,0.9) 78%, black 100%)`;
     const lensClip = `circle(${LENS_RADIUS}px at ${pos.x}px ${pos.y}px)`;
+    // Inverse of lensClip: punches a hole exactly where the lens sits so the
+    // base (un-magnified) text is hidden there, leaving only the magnified
+    // copy drawn inside the lens visible — everywhere outside the lens the
+    // base text stays fully visible.
+    const baseTextMask = `radial-gradient(circle ${LENS_RADIUS}px at ${pos.x}px ${pos.y}px, transparent 0%, transparent 99%, black 100%)`;
 
     const angleRad = (HANDLE_ANGLE * Math.PI) / 180;
     const attachX = LENS_RADIUS + LENS_RADIUS * Math.cos(angleRad);
@@ -136,17 +141,24 @@ export default function MagnifyLens() {
                 className="relative select-none"
                 style={{ width: "100%", maxWidth: "100%", touchAction: "none" }}
             >
-                <p style={{ ...textStyle, margin: 0, whiteSpace: "pre" }}>
-                    {chars.map((ch, i) => (
-                        <span
-                            key={i}
-                            ref={(el) => (charSpanRefs.current[i] = el)}
-                            style={{ display: "inline-block" }}
-                        >
-                            {ch === " " ? "\u00A0" : ch}
-                        </span>
-                    ))}
-                </p>
+                <div
+                    style={{
+                        WebkitMaskImage: baseTextMask,
+                        maskImage: baseTextMask,
+                    }}
+                >
+                    <p style={{ ...textStyle, margin: 0, whiteSpace: "pre" }}>
+                        {chars.map((ch, i) => (
+                            <span
+                                key={i}
+                                ref={(el) => (charSpanRefs.current[i] = el)}
+                                style={{ display: "inline-block" }}
+                            >
+                                {ch === " " ? "\u00A0" : ch}
+                            </span>
+                        ))}
+                    </p>
+                </div>
 
                 <div
                     aria-hidden="true"
@@ -156,7 +168,7 @@ export default function MagnifyLens() {
                         pointerEvents: "none",
                         clipPath: lensClip,
                         WebkitClipPath: lensClip,
-                        background: "var(--lens-surface)",
+                        background: "transparent",
                     }}
                 >
                     <div style={{ position: "absolute", inset: 0, transform: magnifiedTransform, transformOrigin: "0 0" }}>

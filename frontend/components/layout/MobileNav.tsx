@@ -38,14 +38,14 @@ export function MobileNav() {
             className="absolute inset-0 h-full w-full bg-gray-900/50 backdrop-blur-[1px]"
           />
 
-          <div className="absolute inset-y-0 left-0 flex w-64 max-w-[80%] flex-col border-r border-gray-200 bg-white shadow-xl dark:border-gray-800 dark:bg-gray-900">
+          <div className="absolute inset-y-0 left-0 flex w-64 max-w-[80%] flex-col border-r border-gray-200 bg-white shadow-xl dark:border-gray-800 dark:bg-surface-dark">
             <div className="flex h-16 items-center justify-between border-b border-gray-200 px-4 dark:border-gray-800">
               <Link
                 href="/"
                 onClick={() => setOpen(false)}
                 className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white"
               >
-                <img src="/aria-logo2.png" alt="ARIA logo" className="h-8 w-auto" />
+                <img src="/aria-logo4.png" alt="ARIA logo" className="h-8 w-auto dark:invert dark:brightness-90" />
                 ARIA
               </Link>
 

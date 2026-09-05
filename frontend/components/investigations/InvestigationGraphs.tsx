@@ -31,7 +31,7 @@ export function InvestigationGraphs({ graphs }: InvestigationGraphsProps) {
 
   return (
     <section
-      className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900"
+      className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-surface-dark"
       aria-labelledby="investigation-graphs-title"
     >
       <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-4 dark:border-gray-800">

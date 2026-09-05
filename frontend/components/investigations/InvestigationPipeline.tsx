@@ -48,7 +48,7 @@ const STATUS_CONFIG: Record<
   pending: {
     label: "Pending",
     dot: "bg-gray-300",
-    ring: "border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900",
+    ring: "border-gray-200 bg-white dark:border-gray-800 dark:bg-surface-dark",
     icon: Clock,
     iconClass: "text-gray-400 dark:text-gray-500",
   },
@@ -171,7 +171,7 @@ function StageNode({
           config.ring,
         )}
       >
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-gray-500 shadow-sm dark:bg-gray-900 dark:text-gray-400">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-gray-500 shadow-sm dark:bg-surface-dark dark:text-gray-400">
           <StageIcon className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
@@ -223,7 +223,7 @@ export function InvestigationPipeline({ investigation }: InvestigationPipelinePr
 
   return (
     <section
-      className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900"
+      className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-surface-dark"
       aria-labelledby="investigation-pipeline-title"
     >
       <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-gray-800">

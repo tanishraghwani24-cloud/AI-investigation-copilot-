@@ -52,7 +52,7 @@ export function DocumentUpload({ investigationId, onUploaded }: DocumentUploadPr
   };
 
   return (
-    <section className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900" aria-labelledby="document-upload-title">
+    <section className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-surface-dark" aria-labelledby="document-upload-title">
       <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-4 dark:border-gray-800">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"><Upload className="h-5 w-5" /></div>
         <h3 id="document-upload-title" className="text-base font-semibold text-gray-900 dark:text-white">Upload supporting document</h3>

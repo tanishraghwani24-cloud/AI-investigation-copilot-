@@ -19,7 +19,7 @@ export function ReportViewer({ caseId, report }: ReportViewerProps) {
   const status = report?.status ?? AgentStatus.NOT_STARTED;
 
   return (
-    <section className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900" aria-labelledby="report-viewer-title">
+    <section className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-surface-dark" aria-labelledby="report-viewer-title">
       <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-gray-800">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"><ClipboardList className="h-5 w-5" /></div>
@@ -45,7 +45,7 @@ export function ReportViewer({ caseId, report }: ReportViewerProps) {
               <a
                 href={`${API_BASE}/investigations/${encodeURIComponent(caseId)}/report/download`}
                 download
-                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800/60"
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors shadow-sm dark:border-gray-800 dark:bg-surface-dark dark:text-gray-300 dark:hover:bg-gray-800/60"
               >
                 <Download className="h-4 w-4" />
                 Download Report
