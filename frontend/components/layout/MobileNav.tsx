@@ -45,7 +45,7 @@ export function MobileNav() {
                 onClick={() => setOpen(false)}
                 className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white"
               >
-                <img src="/aria-logo4.png" alt="ARIA logo" className="h-8 w-auto dark:invert dark:brightness-90" />
+                <img src="/aria-logo4.png" alt="ARIA logo" className="h-8 w-auto dark:brightness-0 dark:invert" />
                 ARIA
               </Link>
 

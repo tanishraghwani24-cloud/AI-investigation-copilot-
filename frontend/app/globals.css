@@ -187,46 +187,87 @@
   opacity: 0;
 }
 
-/* Landing-page visual language comes from the hero's #a855f7 → #6366f1 gradient. */
+/* Below the locked hero, the landing experience is monochrome with a minimal blue accent. */
 .landing-shell {
-  background:
-    radial-gradient(circle at 12% 18%, rgb(168 85 247 / 0.09), transparent 22rem),
-    radial-gradient(circle at 88% 50%, rgb(99 102 241 / 0.08), transparent 26rem);
+  background: transparent;
 }
 
-.landing-glow {
+.landing-blue-dot {
   position: absolute;
   z-index: 0;
-  width: 16rem;
+  width: 12rem;
   aspect-ratio: 1;
   border-radius: 9999px;
   pointer-events: none;
-  filter: blur(52px);
-  opacity: 0.34;
-  background: linear-gradient(135deg, #a855f7, #6366f1);
-  animation: landing-glow-drift 14s ease-in-out infinite alternate;
+  opacity: 0.18;
+  background: #3b82f6;
+  filter: blur(56px);
 }
 
-.landing-glow-one { top: 8%; left: -9rem; }
-.landing-glow-two { top: 43%; right: -10rem; width: 20rem; animation-delay: -5s; }
-.landing-glow-three { bottom: 7%; left: 22%; width: 13rem; animation-delay: -9s; }
+.landing-blue-dot-one { top: 11%; left: -7rem; }
+.landing-blue-dot-two { top: 48%; right: -8rem; width: 15rem; opacity: 0.14; }
+.landing-blue-dot-three { bottom: 8%; left: 30%; width: 10rem; opacity: 0.12; }
 
-@keyframes landing-glow-drift {
-  from { transform: translate3d(0, 0, 0) scale(0.92); }
-  to { transform: translate3d(1.5rem, -1.25rem, 0) scale(1.08); }
-}
+.dark .landing-blue-dot { opacity: 0.13; }
 
 .landing-card {
   position: relative;
   overflow: hidden;
   transform-style: preserve-3d;
   will-change: transform;
-  box-shadow: 0 10px 28px rgb(76 29 149 / 0.09), 0 2px 5px rgb(15 23 42 / 0.05), inset 0 1px 0 rgb(255 255 255 / 0.8);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.09), 0 2px 5px rgb(0 0 0 / 0.06), inset 0 1px 0 rgb(255 255 255 / 0.8);
   transition: border-color 340ms ease, box-shadow 340ms ease, background-color 340ms ease;
 }
 
 .landing-card-grid {
   perspective: 1200px;
+}
+
+/* The Workflow section ("How ARIA Works") pairs a sticky left-side intro
+   with a right-side deck of sticky case-file cards (components/ui/cards-stack.tsx):
+   each card becomes sticky in turn, with a small increasing top offset and
+   z-depth so earlier cards stay visible beneath the active one. The glow is
+   the same purple/indigo hue as the hero's MagicRings, kept restrained so it
+   reads as an accent rather than the site-wide blue used elsewhere below the
+   hero. */
+.workflow-case-card {
+  background: rgb(255 255 255 / 0.7);
+  border: 1px solid rgb(168 85 247 / 0.14);
+  backdrop-filter: blur(18px) saturate(135%);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  box-shadow:
+    0 24px 60px rgb(0 0 0 / 0.1),
+    0 6px 18px rgb(0 0 0 / 0.06),
+    0 0 0 1px rgb(168 85 247 / 0.05),
+    inset 0 1px 0 rgb(255 255 255 / 0.9);
+}
+
+.workflow-case-card:hover {
+  border-color: rgb(168 85 247 / 0.35);
+  box-shadow:
+    0 32px 72px rgb(0 0 0 / 0.16),
+    0 10px 26px rgb(0 0 0 / 0.08),
+    0 0 44px 4px rgb(168 85 247 / 0.16),
+    inset 0 1px 0 rgb(255 255 255 / 0.96);
+}
+
+.dark .workflow-case-card {
+  background: rgb(9 9 20 / 0.74);
+  border-color: rgb(168 85 247 / 0.16);
+  box-shadow:
+    0 24px 60px rgb(0 0 0 / 0.5),
+    0 6px 18px rgb(0 0 0 / 0.3),
+    0 0 0 1px rgb(129 140 248 / 0.08),
+    inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+
+.dark .workflow-case-card:hover {
+  border-color: rgb(168 130 255 / 0.45);
+  box-shadow:
+    0 30px 72px rgb(0 0 0 / 0.6),
+    0 8px 24px rgb(0 0 0 / 0.35),
+    0 0 56px 6px rgb(129 140 248 / 0.28),
+    inset 0 1px 0 rgb(255 255 255 / 0.1);
 }
 
 .landing-card::after {
@@ -242,8 +283,8 @@
 }
 
 .landing-card:hover {
-  border-color: rgb(168 85 247 / 0.5);
-  box-shadow: 0 30px 54px rgb(99 102 241 / 0.22), 0 12px 24px rgb(168 85 247 / 0.16), inset 0 1px 0 rgb(255 255 255 / 0.9);
+  border-color: rgb(24 24 27 / 0.35);
+  box-shadow: 0 30px 54px rgb(0 0 0 / 0.26), 0 12px 24px rgb(0 0 0 / 0.16), inset 0 1px 0 rgb(255 255 255 / 0.9);
 }
 
 .landing-card:hover::after {
@@ -254,17 +295,23 @@
 .landing-card-icon { transform: translateZ(16px); }
 
 .dark .landing-card {
-  box-shadow: 0 12px 30px rgb(0 0 0 / 0.28), inset 0 1px 0 rgb(255 255 255 / 0.06);
+  box-shadow: 0 12px 30px rgb(255 255 255 / 0.045), 0 2px 6px rgb(255 255 255 / 0.035), inset 0 1px 0 rgb(255 255 255 / 0.06);
 }
 
 .dark .landing-card:hover {
-  border-color: rgb(196 181 253 / 0.45);
-  box-shadow: 0 30px 58px rgb(76 29 149 / 0.45), 0 12px 28px rgb(0 0 0 / 0.38), inset 0 1px 0 rgb(255 255 255 / 0.1);
+  border-color: rgb(255 255 255 / 0.35);
+  box-shadow: 0 30px 58px rgb(255 255 255 / 0.18), 0 12px 28px rgb(255 255 255 / 0.11), inset 0 1px 0 rgb(255 255 255 / 0.12);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .landing-glow { animation: none; }
   .landing-card { transition: none; }
+
+  .workflow-case-card {
+    position: relative !important;
+    top: auto !important;
+    margin-bottom: 1rem !important;
+    transform: none !important;
+  }
 }
 
 /*

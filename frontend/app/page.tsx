@@ -3,6 +3,7 @@ import MagicRings from "@/components/ui/MagicRings";
 import LandingSections from "@/components/landing/LandingSections";
 import GlassmorphismCta from "@/components/ui/GlassmorphismCta";
 import { Reveal } from "@/components/landing/ScrollReveal";
+import { Footer } from "@/components/layout/Footer";
 
 /**
  * Marks the document as able to run the scroll reveals, which lets the
@@ -72,6 +73,7 @@ export default function Home() {
       </div>
 
       <LandingSections />
+      <Footer />
     </div>
   );
 }

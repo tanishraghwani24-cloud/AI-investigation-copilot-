@@ -3,11 +3,13 @@ import { Inter, Geist } from 'next/font/google';
 import Link from 'next/link';
 import './globals.css';
 import { cn } from "@/lib/utils";
+import { DesktopNav } from "@/components/layout/DesktopNav";
 import GradientButtonGroup from "@/components/ui/GradientButtonGroup";
 import { InvestigatorProvider } from "@/components/auth/InvestigatorProvider";
 import { InvestigatorBadge } from "@/components/auth/InvestigatorBadge";
 import { ToastProvider } from "@/components/ui/ToastProvider";
 import { PageTransition } from "@/components/layout/PageTransition";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
@@ -46,21 +48,31 @@ export default function RootLayout({
       <body className={`${inter.className} flex h-screen overflow-hidden bg-gray-50 dark:bg-surface-dark`}>
         <InvestigatorProvider>
           <ToastProvider>
-            {/* Main Content Area */}
-            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-              {/* Header */}
-              <header className="flex min-h-16 items-center justify-between border-b border-gray-200 bg-white px-4 sm:min-h-20 sm:px-6 dark:border-gray-800 dark:bg-surface-dark">
-                <Link href="/" className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
-                  <img src="/aria-logo4.png" alt="ARIA logo" className="h-9 w-auto dark:invert dark:brightness-90" />
-                  ARIA
-                </Link>
-                <InvestigatorBadge />
-              </header>
+            <div className="flex h-screen w-full">
+              {/* Left Sidebar */}
+              <aside className="hidden w-64 flex-col border-r border-gray-200 bg-[#0B1120] sm:flex dark:border-gray-800">
+                <div className="flex min-h-16 items-center px-6 sm:min-h-20">
+                  <Link href="/" className="flex items-center gap-2 text-lg font-semibold text-white">
+                    <img src="/aria-logo4.png" alt="ARIA logo" className="h-9 w-auto brightness-0 invert" />
+                    ARIA
+                  </Link>
+                </div>
+                <DesktopNav />
+              </aside>
 
-              {/* Page Content */}
-              <main className="flex-1 overflow-y-auto p-4 pb-28 sm:p-6 sm:pb-32">
-                <PageTransition>{children}</PageTransition>
-              </main>
+              {/* Main Content Area */}
+              <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                {/* Header */}
+                <header className="flex min-h-16 items-center justify-end gap-4 border-b border-gray-200 bg-white px-4 sm:min-h-20 sm:px-6 dark:border-gray-800 dark:bg-surface-dark">
+                  <ThemeToggle />
+                  <InvestigatorBadge />
+                </header>
+
+                {/* Page Content */}
+                <main className="flex-1 overflow-y-auto p-4 pb-12 sm:p-6 sm:pb-16">
+                  <PageTransition>{children}</PageTransition>
+                </main>
+              </div>
             </div>
             <GradientButtonGroup />
           </ToastProvider>

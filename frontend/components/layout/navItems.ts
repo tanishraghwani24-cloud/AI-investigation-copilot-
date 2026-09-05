@@ -1,4 +1,12 @@
-import { FileBarChart, FolderSearch, Inbox, Settings as SettingsIcon } from "lucide-react";
+import { 
+  LayoutDashboard,
+  Search,
+  ArrowLeftRight,
+  Diamond,
+  Hexagon,
+  AlignJustify,
+  CircleDot
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 /**
@@ -16,8 +24,11 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { label: "Officer Inbox", href: "/officer", icon: Inbox },
-  { label: "Investigations", href: "/investigations", icon: FolderSearch },
-  { label: "Reports", href: "/reports", icon: FileBarChart },
-  { label: "Settings", href: "#", icon: SettingsIcon },
+  { label: "Overview", href: "/", icon: LayoutDashboard },
+  { label: "Investigations", href: "/investigations", icon: Search },
+  { label: "Transactions", href: "/officer", icon: ArrowLeftRight },
+  { label: "Analytics", href: "#", icon: Diamond },
+  { label: "Collaboration", href: "#", icon: Hexagon },
+  { label: "Reports", href: "/reports", icon: AlignJustify },
+  { label: "Audit Trail", href: "#", icon: CircleDot },
 ];
